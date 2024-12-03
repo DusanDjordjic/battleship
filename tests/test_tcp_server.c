@@ -8,7 +8,7 @@
 
 #define TEST_PORT 8080
 
-Test(tcp_server, server_starts_successfully) {
+Test(tcp_server, starts_successfully) {
     int server_fd = start_server(TEST_PORT);
     cr_assert(server_fd > 0, "Failed to start server!");
 
