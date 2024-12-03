@@ -24,5 +24,6 @@ Sa strane servera to bi izgledalo ovako:
 
 # 03.12.2024
 
-- Napraviti pocetnju strukturu projekta
-- Dodati skripte za automatsko testiranje koda kao i github action koji ca da build-uje kod i testira ga nakon svakog commit-a
+- Napravljena pocetna struktura projekta
+- Dodat make test target za automatsko testiranje koda kao i github action koji ca da build-uje kod i testira ga nakon svakog commit-a
+- Dodan ncurses i hello world example program

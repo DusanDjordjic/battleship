@@ -28,3 +28,10 @@ ukoliko nisu pogođeni svi delovi iste. Igra se završava kada neki od igrača i
 Prikazati trenutno stanje igre u vizuelnom formatu pogodnom za čitanje od strane ljudi, odnosno igrača.
 U svakom trenutku treba omogućiti prelazak sa ekrana za igru na ekran sa glavnim menijem
 (postavka koordinata podmornica, početak i kraj igre, nastavak započete igre) i obrnuto.
+
+## Kako pokrenuti projekat
+
+1. Instalirati ncurses biblioteku. Nju nismo dodali u external jer vecina linux operativnih sistema je vec ima.
+2. Pokrenuti `make build`. Ova komanda ce da napravi bin/server.out and bin/clinet.out programe
+3. pokrenuti server `./bin/server.out`
+4. pokrenuti vise klijenata `./bin/client.out`

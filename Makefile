@@ -2,7 +2,8 @@ CWD=$(shell pwd)
 
 CC=gcc
 CFLAGS=-Wall -Wextra -I$(CWD)/include -Wpedantic
-LFLAGS=-pthread -L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
+LFLAGS=-pthread -lncurses
+TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
 
 # Folders
 SRC=src
@@ -57,7 +58,7 @@ test: $(TEST_BIN)
 	./$<
 
 $(TEST_BIN): $(TESTS_ALL_OBJS)
-	$(CC) -o $@ $^ $(LFLAGS)
+	$(CC) -o $@ $^ $(LFLAGS) $(TEST_LFLAGS)
 
 # Used to create object and binary folders
 
