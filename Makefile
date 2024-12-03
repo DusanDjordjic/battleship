@@ -28,8 +28,8 @@ TESTS_ALL_SRCS=$(SERVER_SRCS) $(CLIENT_SRCS) $(TESTS_SRCS)
 TESTS_ALL_OBJS=$(SERVER_OBJS) $(CLIENT_OBJS) $(TESTS_OBJS)
 TEST_BIN=$(BIN)/test_runner.out
 
-.PHONY: all
-all: server client
+.PHONY: build
+build: server client
 
 .PHONY: server
 server: $(SERVER_BIN)
@@ -52,7 +52,7 @@ $(OBJ)/%.o: $(TESTS)/%.c
 $(OBJ)/%.o: $(SRC)/%.c
 	$(CC) -o $@ -c $< $(CFLAGS)
 
-.PHONY:test
+.PHONY: test
 test: $(TEST_BIN)
 	./$<
 
