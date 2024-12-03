@@ -28,25 +28,3 @@ ukoliko nisu pogođeni svi delovi iste. Igra se završava kada neki od igrača i
 Prikazati trenutno stanje igre u vizuelnom formatu pogodnom za čitanje od strane ljudi, odnosno igrača.
 U svakom trenutku treba omogućiti prelazak sa ekrana za igru na ekran sa glavnim menijem
 (postavka koordinata podmornica, početak i kraj igre, nastavak započete igre) i obrnuto.
-
-## Implementacija - Pocetna ideja
-
-Napraviti TCP server koji se brine o igracima, trenutnim igrama i rezultatima. TCP server za pocetak treba da bude jednostavan,
-koristicemo jedan thread za svaku konekciju sa nekim "globalnim" stanjem servera u kome cemo da cuvamo trenutno konektovane
-igrace, igre koje trenutno traju, rezultate igara itd.
-
-Sa client strane cemo da napravimo TUI koristeci nccurses da bi smo dobili sto fukncionalniji UI.
-
-Sa strane klijenta igranje same igre bi izgledalao nekako ovako:
-
-1. Login - kada se client konektuje na server treba da napravi usera tako sto ce da izabere svoje ime koje ce biti sacuvano na serveru.
-2. Pozove nekog od drugih igraca da duel ili ga neko pozove na duel
-3. Kada prihvati duel ili izazvani igrac prihvati duel igra pocinje
-4. Kada jedan od igraca pobedi igra se zavrsava i oni mogu da izadju iz igre ili da igraju ponovo
-5. Rezultati svake partije se cuvaju radi rang liste.
-
-Sa strane servera to bi izgledalo ovako:
-
-1. Prihvatamo konekcije svih klijenata i radimo login sa njima
-2. Kada neko izazove nekog drugog na duel i duel bude prihvacen pravimo Game objekat koji dalje koristimo
-3. Nakon zavrsetka igre cuvamo rezultate i nastavljamo dalje
