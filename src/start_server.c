@@ -5,7 +5,6 @@
 #include "tcp_server.h"
 
 int start_server(int port) {
-    return 0;
     int server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (server_fd == 0) {
         perror("Socket failed");
