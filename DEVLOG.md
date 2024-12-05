@@ -27,3 +27,11 @@ Sa strane servera to bi izgledalo ovako:
 - Napravljena pocetna struktura projekta
 - Dodat make test target za automatsko testiranje koda kao i github action koji ca da build-uje kod i testira ga nakon svakog commit-a
 - Dodan ncurses i hello world example program
+
+# 04.12.2024
+
+- Ipak necemo jos da koristimo ncurses
+- Naprljen meni sistem sa vise stranica
+- Napravljen mock sistem za konektovanje na server, signup, login, logout
+- TODO: dodati testove za meni
+- TODO: napraviti novi thread za prihvatanje poruka i SIGNINT handler. Koristiti epool za proveu da li je user uneo nesto.

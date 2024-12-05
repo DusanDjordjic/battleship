@@ -2,7 +2,8 @@ CWD=$(shell pwd)
 
 CC=gcc
 CFLAGS=-Wall -Wextra -I$(CWD)/include -Wpedantic
-LFLAGS=-pthread -lncurses
+# LFLAGS=-pthread -lncurses
+LFLAGS=-pthread
 TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
 
 # Folders
@@ -17,7 +18,7 @@ SERVER_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS)))
 SERVER_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS_BINARY)))
 SERVER_BIN=$(BIN)/server.out
 
-CLIENT_SRCS=
+CLIENT_SRCS=$(SRC)/io.c $(SRC)/menu.c
 CLIENT_SRCS_BINARY=$(SRC)/bin/client.c
 CLIENT_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS)))
 CLIENT_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS_BINARY)))
