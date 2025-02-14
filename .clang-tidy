@@ -1,0 +1,3 @@
+Checks: 'readability-*,clang-diagnostic-*,clang-analyzer-*,bugprone-*'
+WarningsAsErrors: 'clang-diagnostic-*'
+ExtraArgs: ['-Wall', '-Wextra']
