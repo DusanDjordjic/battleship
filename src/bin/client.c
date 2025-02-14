@@ -1,9 +1,12 @@
 #include "errors.h"
 #include "io.h"
 #include "menu.h"
+#include <args.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
+#include <include/args.h>
+#include <include/state.h>
 #include <ncurses.h>
 #include <netinet/in.h>
 #include <stdio.h>
@@ -16,36 +19,11 @@
 		exit(1);                                                    \
 	}
 
-#define PORT_BASE 10
-#define PORT_MAX ((1 << 16) - 1)
-
-#define API_KEY_LEN 16
-
-#define USERNAME_MAX_LEN 32
-#define PASSWORD_MAX_LEN 32
-
-typedef struct {
-	uint32_t id;
-	char username[USERNAME_MAX_LEN];
-	char password[PASSWORD_MAX_LEN];
-} user_t;
-
-typedef struct {
-	int sock_fd;
-	struct sockaddr_in addr;
-	user_t user;
-	char api_token[API_KEY_LEN];
-} client_state_t;
-
 error_code client_signup(client_state_t* state);
 error_code client_login(client_state_t* state);
 error_code client_logout(client_state_t* state);
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
-
-error_code parse_args(client_state_t* state, int argc, char** argv);
-error_code parse_port(char* s_port, uint16_t* port);
-void usage(char* exe);
 
 void menu_item_display(menu_item_t* item)
 {
@@ -57,7 +35,7 @@ int main(int argc, char** argv)
 	// IMPORTANT: initialize state to all zeros
 	client_state_t state = { 0 };
 
-	error_code err = parse_args(&state, argc, argv);
+	error_code err = client_parse_args(&state, argc, argv);
 	if (err != ERR_NONE) {
 		// parse_args will log the error
 		return 1;
@@ -288,56 +266,6 @@ error_code client_signup(client_state_t* state)
 	strncpy(state->api_token, "API_T_FROM_SRV", API_KEY_LEN);
 	return ERR_NONE;
 }
-
-error_code parse_args(client_state_t* state, int argc, char** argv)
-{
-	if (argc < 3) {
-		usage(argv[0]);
-		return ERR_ARG_NOT_ENOUGH;
-	}
-
-	char* sip = argv[1];
-	char* sport = argv[2];
-
-	uint16_t port;
-	error_code err = parse_port(sport, &port);
-	if (err != ERR_NONE) {
-		return err;
-	}
-
-	state->addr.sin_addr.s_addr = inet_addr(sip);
-	state->addr.sin_family = AF_INET;
-	state->addr.sin_port = htons(port);
-
-	state->sock_fd = 0;
-	return ERR_NONE;
-}
-
-error_code parse_port(char* s_port, uint16_t* port)
-{
-	assert(s_port != NULL);
-	assert(*s_port != '\0');
-	assert(port != NULL);
-
-	char* rest = NULL;
-	uint32_t parsed = strtoul(s_port, &rest, PORT_BASE);
-	if (rest == NULL || *rest != '\0') {
-		fprintf(stderr, "port \"%s\" is in invalid format\n", s_port);
-		return ERR_ARG_PORT_IFORMAT;
-	}
-
-	if (parsed > PORT_MAX) {
-		fprintf(stderr, "port number is invalid, max = %u : port %u\n", PORT_MAX,
-			parsed);
-		return ERR_ARG_IPORT;
-	}
-
-	*port = parsed;
-
-	return ERR_NONE;
-}
-
-void usage(char* exe) { printf("Usage: %s <server_ip> <server_port>\n", exe); }
 
 error_code client_menu_create(menu_t* menu)
 {

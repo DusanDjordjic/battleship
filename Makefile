@@ -3,22 +3,27 @@ CWD=$(shell pwd)
 CC=gcc
 CFLAGS=-Wall -Wextra -I$(CWD)/include -Wpedantic
 # LFLAGS=-pthread -lncurses
-LFLAGS=-pthread
-TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
+LFLAGS=-pthread -lvector -L$(CWD)/external/vector -Wl,-rpath,$(CWD)/external/vector
+TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2,
 
 # Folders
 SRC=src
 OBJ=obj
 BIN=bin
+INC=include
 TESTS=tests
 
-SERVER_SRCS=$(SRC)/start_server.c
+HEADERS=$(INC)/args.h $(INC)/errors.h $(INC)/io.h \
+	$(INC)/menu.h $(INC)/server.h $(INC)/state.h $(INC)/tcp_server.h \
+	$(INC)/vector/vector.h
+
+SERVER_SRCS=$(SRC)/start_server.c $(SRC)/args.c
 SERVER_SRCS_BINARY=$(SRC)/bin/server.c
 SERVER_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS)))
 SERVER_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS_BINARY)))
 SERVER_BIN=$(BIN)/server.out
 
-CLIENT_SRCS=$(SRC)/io.c $(SRC)/menu.c
+CLIENT_SRCS=$(SRC)/io.c $(SRC)/menu.c $(SRC)/args.c
 CLIENT_SRCS_BINARY=$(SRC)/bin/client.c
 CLIENT_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS)))
 CLIENT_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS_BINARY)))
@@ -45,13 +50,13 @@ $(SERVER_BIN): $(SERVER_OBJS) $(SERVER_OBJS_BINARY)
 $(CLIENT_BIN): $(CLIENT_OBJS) $(CLIENT_OBJS_BINARY)
 	$(CC) -o $@ $^ $(LFLAGS)
 
-$(OBJ)/%.o: $(SRC)/bin/%.c
+$(OBJ)/%.o: $(SRC)/bin/%.c $(HEADERS)
 	$(CC) -o $@ -c $< $(CFLAGS)
 
-$(OBJ)/%.o: $(TESTS)/%.c
+$(OBJ)/%.o: $(TESTS)/%.c $(HEADERS)
 	$(CC) -o $@ -c $< $(CFLAGS)
 
-$(OBJ)/%.o: $(SRC)/%.c
+$(OBJ)/%.o: $(SRC)/%.c $(HEADERS)
 	$(CC) -o $@ -c $< $(CFLAGS)
 
 .PHONY: test
