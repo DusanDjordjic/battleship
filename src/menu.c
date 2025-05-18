@@ -3,9 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#include "errors.h"
-#include "io.h"
-#include "menu.h"
+#include <include/errors.h>
+#include <include/io.h>
+#include <include/menu.h>
 
 menu_page_t* menu_current_page(menu_t* menu) {
     assert(menu != NULL);

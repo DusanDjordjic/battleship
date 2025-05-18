@@ -1,11 +1,10 @@
-#include "errors.h"
-#include "io.h"
-#include "menu.h"
-#include <args.h>
+#include <include/errors.h>
+#include <include/io.h>
+#include <include/menu.h>
+#include <include/args.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
-#include <include/args.h>
 #include <include/state.h>
 #include <ncurses.h>
 #include <netinet/in.h>

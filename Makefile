@@ -1,7 +1,7 @@
 CWD=$(shell pwd)
 
 CC=gcc
-CFLAGS=-Wall -Wextra -I$(CWD)/include -Wpedantic
+CFLAGS=-Wall -Wextra -I$(CWD) -Wpedantic
 # LFLAGS=-pthread -lncurses
 LFLAGS=-pthread -lvector -L$(CWD)/external/vector -Wl,-rpath,$(CWD)/external/vector
 TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2,
