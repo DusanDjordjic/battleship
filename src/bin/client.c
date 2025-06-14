@@ -1,3 +1,6 @@
+#include "include/globals.h"
+#include "include/messages.h"
+#include <asm-generic/errno-base.h>
 #include <include/errors.h>
 #include <include/io.h>
 #include <include/menu.h>
@@ -11,6 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 #define UNREACHABLE                                                 \
 	{                                                               \
@@ -59,9 +64,9 @@ int main(int argc, char** argv)
 		error_code err = menu_display(&menu, &choice, menu_item_display);
 		switch (err) {
 		case ERR_MENU_IOPTION:
-		case ERR_IO_IIN:
-		case ERR_IO_IARG:
-		case ERR_IO_UNKNOWN:
+		case ERR_IIN:
+		case ERR_IARG:
+		case ERR_UNKNOWN:
             error_print(err);
 			continue;
 		case ERR_ALLOC:
@@ -133,14 +138,47 @@ int main(int argc, char** argv)
 
 EXIT:
 	menu_deinit(&menu);
+    if (state.sock_fd != 0) {
+        close(state.sock_fd);
+    }
 
 	return 0;
 }
 
 error_code connect_to_server(client_state_t* state)
 {
-	state->sock_fd = 0;
-	// TODO connect to server
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock_fd == -1) {
+        switch (errno) {
+            case EACCES:
+                return ERR_PERMISSION_DENIED;
+            default:
+                return ERR_UNKNOWN;
+        }
+    }
+
+    int ret = connect(sock_fd, (struct sockaddr*)&(state->addr), sizeof(struct sockaddr_in));
+    if (ret == -1) {
+        switch (errno) {
+            case EACCES:
+                return ERR_PERMISSION_DENIED;
+            case ENETUNREACH:
+                // Connection is unreachable because address is invalid
+            case ECONNREFUSED:
+                // Connection refused because address is invalid
+            case EAFNOSUPPORT:
+                // Passed address didn't have correct address family
+                return ERR_IARG;
+            case EBADF:
+                // Passed socket it not valid
+                return ERR_IFD;
+            default:
+                return ERR_UNKNOWN;
+        }
+    }
+
+    state->sock_fd = sock_fd;
+
 	return ERR_NONE;
 }
 
@@ -156,29 +194,27 @@ error_code client_login(client_state_t* state)
 	switch (err) {
 	case ERR_NONE:
 		break;
-	case ERR_IO_IIN:
-		fprintf(stderr, "invalid input\n");
+	case ERR_IIN:
+	case ERR_UNKNOWN:
+        error_print(err);
 		return err;
-	case ERR_IO_UNKNOWN:
-		fprintf(stderr, "unknown error: %s", strerror(errno));
-		return err;
-	case ERR_IO_IARG:
+	case ERR_IARG:
 		// unreachable because we passed USERNAME_MAX_LEN as string len
 		UNREACHABLE;
 	default:
 		UNREACHABLE;
 	}
 
-	printf("\nEnter password (max %d): ", PASSWORD_MAX_LEN);
+	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
 	err = read_line_no_echo(state->user.password, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
 		break;
-	case ERR_IO_IIN:
-	case ERR_IO_UNKNOWN:
+	case ERR_IIN:
+	case ERR_UNKNOWN:
         error_print(err);
 		return err;
-	case ERR_IO_IARG:
+	case ERR_IARG:
 		// unreachable because we passed PASSWORD_MAX_LEN as string len
 		UNREACHABLE;
 	default:
@@ -193,6 +229,7 @@ error_code client_login(client_state_t* state)
 	strncpy(state->api_token, "API_T_FROM_SRV", API_KEY_LEN);
 	return ERR_NONE;
 }
+
 error_code client_logout(client_state_t* state)
 {
 	if (state->user.id == 0) {
@@ -219,11 +256,11 @@ error_code client_signup(client_state_t* state)
 	switch (err) {
 	case ERR_NONE:
 		break;
-	case ERR_IO_IIN:
-	case ERR_IO_UNKNOWN:
+	case ERR_IIN:
+	case ERR_UNKNOWN:
         error_print(err);
 		return err;
-	case ERR_IO_IARG:
+	case ERR_IARG:
 		// unreachable because we passed USERNAME_MAX_LEN as string len
 		UNREACHABLE;
 	default:
@@ -235,11 +272,11 @@ error_code client_signup(client_state_t* state)
 	switch (err) {
 	case ERR_NONE:
 		break;
-	case ERR_IO_IIN:
-	case ERR_IO_UNKNOWN:
+	case ERR_IIN:
+	case ERR_UNKNOWN:
         error_print(err);
 		return err;
-	case ERR_IO_IARG:
+	case ERR_IARG:
 		// unreachable because we passed PASSWORD_MAX_LEN as string len
 		UNREACHABLE;
 	default:
@@ -251,11 +288,11 @@ error_code client_signup(client_state_t* state)
 	switch (err) {
 	case ERR_NONE:
 		break;
-	case ERR_IO_IIN:
-	case ERR_IO_UNKNOWN:
-        error_print(ERR_IO_UNKNOWN);
+	case ERR_IIN:
+	case ERR_UNKNOWN:
+        error_print(ERR_UNKNOWN);
 		return err;
-	case ERR_IO_IARG:
+	case ERR_IARG:
 		// unreachable because we passed PASSWORD_MAX_LEN as string len
 		UNREACHABLE;
 	default:
@@ -273,12 +310,38 @@ error_code client_signup(client_state_t* state)
     }
 
 
-	// TODO send signup message to server and get the user_id back
-	// update user with user_id
-	state->user.id = 1;
+    SignupRequestMessage req; 
+    strncpy(req.username, state->user.username, USERNAME_MAX_LEN);
+    strncpy(req.password, state->user.password, PASSWORD_MAX_LEN);
+    
+    err = send_message(state->sock_fd, &req, sizeof(SignupRequestMessage)); 
+    if (err != ERR_NONE) {
+        fprintf(stderr, "Failed to send message, %d - %s\n", err, error_to_string(err));
+        return err;
+    }
 
-	// Also signup will do the login as well and we will get the token back
-	strncpy(state->api_token, "API_T_FROM_SRV", API_KEY_LEN);
+   
+    SignupResponseMessage res = { 0 };
+    err = read_message(state->sock_fd, &res, sizeof(SignupResponseMessage));
+    if (err != ERR_NONE) {
+        fprintf(stderr, "Failed to read message, %d - %s\n", err, error_to_string(err));
+        return err;
+    }
+   
+    
+    if (res.error.status_code != STATUS_OK) {
+        fprintf(stderr, "ERROR: Signup request failed, status %d message %s", res.error.status_code, res.error.message);
+
+        if (res.error.status_code == STATUS_CONFLICT) {
+            return ERR_USERNAME_EXISTS;
+        }
+
+        return ERR_UNKNOWN;
+    }
+
+    
+	state->user.id = res.success.user_id;
+	strncpy(state->api_token, res.success.api_key, API_KEY_LEN);
 	return ERR_NONE;
 }
 

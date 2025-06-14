@@ -15,15 +15,15 @@ TESTS=tests
 
 HEADERS=$(INC)/args.h $(INC)/errors.h $(INC)/io.h \
 	$(INC)/menu.h $(INC)/server.h $(INC)/state.h $(INC)/tcp_server.h \
-	$(INC)/globals.h $(INC)/vector/vector.h
+	$(INC)/globals.h $(INC)/messages.h $(INC)/vector/vector.h
 
-SERVER_SRCS=$(SRC)/io.c $(SRC)/start_server.c $(SRC)/args.c
+SERVER_SRCS=$(SRC)/error.c $(SRC)/start_server.c $(SRC)/args.c $(SRC)/messages.c
 SERVER_SRCS_BINARY=$(SRC)/bin/server.c
 SERVER_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS)))
 SERVER_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS_BINARY)))
 SERVER_BIN=$(BIN)/server.out
 
-CLIENT_SRCS=$(SRC)/io.c $(SRC)/menu.c $(SRC)/args.c
+CLIENT_SRCS=$(SRC)/io.c $(SRC)/error.c $(SRC)/menu.c $(SRC)/args.c $(SRC)/messages.c
 CLIENT_SRCS_BINARY=$(SRC)/bin/client.c
 CLIENT_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS)))
 CLIENT_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS_BINARY)))

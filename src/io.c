@@ -8,39 +8,6 @@
 #define NUMBER_LEN 32
 #define NUMBER_BASE 10
 
-char* error_to_string(error_code error)
-{
-	switch (error) {
-    case ERR_NONE:
-        return "ERROR: None";
-    case ERR_ALLOC:
-        return "ERROR: Allocation failed";
-    case ERR_PASSWORDS_NO_MATCH:
-        return "ERROR: Passwords don't match";
-    case ERR_MENU_IOPTION:
-        return "ERROR: Invalid menu option selected";
-    case ERR_ARG_PORT_IFORMAT:
-        return "ERROR: Port number is in wrong format";
-    case ERR_ARG_IPORT:
-        return "ERROR: Port number is invalid";
-    case ERR_ARG_NOT_ENOUGH:
-        return "ERROR: Not enough arguments";
-	case ERR_IO_IIN:
-		return "ERROR: Invalid input";
-	case ERR_IO_IARG:
-		return "ERROR: Invalid parameters/arguments";
-	case ERR_IO_UNKNOWN:
-		return "ERROR: Unknown error";
-	default:
-		return "UNREACHABLE";
-	}
-}
-
-void error_print(error_code error)
-{
-	fprintf(stderr, "%s\n", error_to_string(error));
-}
-
 static void clear_stdin()
 {
 	int tmp;
@@ -64,12 +31,12 @@ error_code read_line(char* line, uint32_t len)
 	// we return an error because
 	// there is no space for other chars
 	if (len < 2) {
-		return ERR_IO_IARG;
+		return ERR_IARG;
 	}
 
 	char* res = fgets(line, (int32_t)len, stdin);
 	if (res == NULL) {
-		return ERR_IO_UNKNOWN;
+		return ERR_UNKNOWN;
 	}
 
 	// check if we have '\n' in line.
@@ -77,7 +44,7 @@ error_code read_line(char* line, uint32_t len)
 	// but we have to replace it with \0
 	if (*line == '\n') {
 		// User just pressed enter without typing any chars
-		return ERR_IO_IIN;
+		return ERR_IIN;
 	}
 
 	uint32_t index = string_find('\n', line, len);
@@ -96,7 +63,7 @@ error_code read_line_no_echo(char* line, uint32_t len)
 	// we return an error because
 	// there is no space for other chars
 	if (len < 2) {
-		return ERR_IO_IARG;
+		return ERR_IARG;
 	}
 
     struct termios old;
@@ -116,7 +83,7 @@ error_code read_line_no_echo(char* line, uint32_t len)
     tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
 	if (res == NULL) {
-		return ERR_IO_UNKNOWN;
+		return ERR_UNKNOWN;
 	}
 
 	// check if we have '\n' in line.
@@ -124,7 +91,7 @@ error_code read_line_no_echo(char* line, uint32_t len)
 	// but we have to replace it with \0
 	if (*line == '\n') {
 		// User just pressed enter without typing any chars
-		return ERR_IO_IIN;
+		return ERR_IIN;
 	}
 
 	uint32_t index = string_find('\n', line, len);
@@ -161,7 +128,7 @@ error_code read_uint32(uint32_t* out)
 	}
 
 	// nothing in string is valid number
-	return ERR_IO_IIN;
+	return ERR_IIN;
 }
 
 error_code read_int32(int32_t* out)

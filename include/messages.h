@@ -1,6 +1,7 @@
 #ifndef MESSAGES_H
 #define MESSAGES_H
 
+#include "include/errors.h"
 #include <stdint.h>
 #include <include/globals.h>
 
@@ -11,7 +12,8 @@ typedef struct {
 
 typedef struct {
     uint8_t status_code;
-    char token[API_KEY_LEN];
+    uint32_t user_id;
+    char api_key[API_KEY_LEN];
 } SignupSuccessResponseMessage;
 
 typedef struct {
@@ -23,5 +25,8 @@ typedef union {
     SignupSuccessResponseMessage success;
     SignupErrorResponseMessage error; 
 } SignupResponseMessage;
+
+error_code send_message(int sock_fd, const void* message, uint32_t len);
+error_code read_message(int sock_fd, void* buffer, uint32_t len);
 
 #endif
