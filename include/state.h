@@ -5,15 +5,13 @@
 #include <bits/pthreadtypes.h>
 #include <netinet/in.h>
 #include <stdint.h>
-
-#define API_KEY_LEN 16
-#define USERNAME_MAX_LEN 32
-#define PASSWORD_MAX_LEN 32
+#include <include/globals.h>
 
 typedef struct {
 	uint32_t id;
 	char username[USERNAME_MAX_LEN];
 	char password[PASSWORD_MAX_LEN];
+	char repeatedPassword[PASSWORD_MAX_LEN];
 } user_t;
 
 typedef struct {

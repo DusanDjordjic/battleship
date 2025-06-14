@@ -15,7 +15,7 @@ TESTS=tests
 
 HEADERS=$(INC)/args.h $(INC)/errors.h $(INC)/io.h \
 	$(INC)/menu.h $(INC)/server.h $(INC)/state.h $(INC)/tcp_server.h \
-	$(INC)/vector/vector.h
+	$(INC)/globals.h $(INC)/vector/vector.h
 
 SERVER_SRCS=$(SRC)/start_server.c $(SRC)/args.c
 SERVER_SRCS_BINARY=$(SRC)/bin/server.c

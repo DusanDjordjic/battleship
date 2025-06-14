@@ -8,12 +8,14 @@ Potrebno je implementirati TCP klijent-server aplikaciju “podmornice”.
 
 ### Pravila igre
 
-Svakom igraču je dodeljena tabela od 3x3 polja, koja predstavlja oblast mora u kojoj su sakrivene igračeve podmornice.
-Kolone se obeležavaju slovima abecede od A do C, a vrste celim brojevima od 1 do 3.
+Svakom igraču je dodeljena tabela od 8x8 polja, koja predstavlja oblast mora u kojoj su sakrivene igračeve podmornice.
+Kolone se obeležavaju slovima abecede od A do H, a vrste brojevima od 1 do 8.
 Svaki igrač na početku bitke raspolaže sledećim podmornicama:
 
-- podmornica veličine 1 polja,
-- podmornica veličine 2 polja.
+- Podmornice veličine 1 polja X 4,
+- Podmornice veličine 2 polja X 3.
+- Podmornice veličine 3 polja X 2.
+- Podmornice veličine 4 polja X 1.
 
 Podmornice je moguće orijentisati samo vertikalno i horizontalno (sva polja koja zauzima jedna podmornica su poravnata duž jedne linije).
 Podmornice smeju da se dodiruju. Podmornice su nepokretne u toku igre.

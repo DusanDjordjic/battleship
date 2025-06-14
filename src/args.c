@@ -1,3 +1,5 @@
+#include <include/errors.h>
+#include <include/io.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <include/args.h>
@@ -20,6 +22,7 @@ error_code client_parse_args(client_state_t* state, int argc, char** argv)
 	uint16_t port;
 	error_code err = parse_port(sport, &port);
 	if (err != ERR_NONE) {
+        error_print(err);
 		return err;
 	}
 
@@ -43,6 +46,7 @@ error_code server_parse_args(server_state_t* state, int argc, char** argv)
 	uint16_t port;
 	error_code err = parse_port(sport, &port);
 	if (err != ERR_NONE) {
+        // error_print(err);
 		return err;
 	}
 
@@ -59,13 +63,10 @@ error_code parse_port(char* s_port, uint16_t* port)
 	char* rest = NULL;
 	uint32_t parsed = strtoul(s_port, &rest, PORT_BASE);
 	if (rest == NULL || *rest != '\0') {
-		fprintf(stderr, "port \"%s\" is in invalid format\n", s_port);
 		return ERR_ARG_PORT_IFORMAT;
 	}
 
 	if (parsed > PORT_MAX) {
-		fprintf(stderr, "port number is invalid, max = %u : port %u\n", PORT_MAX,
-			parsed);
 		return ERR_ARG_IPORT;
 	}
 

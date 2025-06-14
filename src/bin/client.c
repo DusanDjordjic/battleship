@@ -59,14 +59,10 @@ int main(int argc, char** argv)
 		error_code err = menu_display(&menu, &choice, menu_item_display);
 		switch (err) {
 		case ERR_MENU_IOPTION:
-			fprintf(stderr, "invalid option selected\n");
-			continue;
 		case ERR_IO_IIN:
 		case ERR_IO_IARG:
-			fprintf(stderr, "invalid input\n");
-			continue;
 		case ERR_IO_UNKNOWN:
-			fprintf(stderr, "unknown error, try again...");
+            error_print(err);
 			continue;
 		case ERR_ALLOC:
 			fprintf(stderr, "unrecoverable state, closing...");
@@ -174,15 +170,13 @@ error_code client_login(client_state_t* state)
 	}
 
 	printf("\nEnter password (max %d): ", PASSWORD_MAX_LEN);
-	err = read_line(state->user.password, PASSWORD_MAX_LEN);
+	err = read_line_no_echo(state->user.password, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
 		break;
 	case ERR_IO_IIN:
-		fprintf(stderr, "invalid input\n");
-		return err;
 	case ERR_IO_UNKNOWN:
-		fprintf(stderr, "unknown error: %s", strerror(errno));
+        error_print(err);
 		return err;
 	case ERR_IO_IARG:
 		// unreachable because we passed PASSWORD_MAX_LEN as string len
@@ -226,10 +220,8 @@ error_code client_signup(client_state_t* state)
 	case ERR_NONE:
 		break;
 	case ERR_IO_IIN:
-		fprintf(stderr, "invalid input\n");
-		return err;
 	case ERR_IO_UNKNOWN:
-		fprintf(stderr, "unknown error: %s", strerror(errno));
+        error_print(err);
 		return err;
 	case ERR_IO_IARG:
 		// unreachable because we passed USERNAME_MAX_LEN as string len
@@ -238,17 +230,14 @@ error_code client_signup(client_state_t* state)
 		UNREACHABLE;
 	}
 
-	printf("\nEnter password (max %d): ", PASSWORD_MAX_LEN);
-	err = read_line(state->user.password, PASSWORD_MAX_LEN);
+	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
+	err = read_line_no_echo(state->user.password, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
 		break;
 	case ERR_IO_IIN:
-		fprintf(stderr, "invalid input\n");
-		return err;
-		UNREACHABLE;
 	case ERR_IO_UNKNOWN:
-		fprintf(stderr, "unknown error: %s", strerror(errno));
+        error_print(err);
 		return err;
 	case ERR_IO_IARG:
 		// unreachable because we passed PASSWORD_MAX_LEN as string len
@@ -256,6 +245,33 @@ error_code client_signup(client_state_t* state)
 	default:
 		UNREACHABLE;
 	}
+
+	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
+	err = read_line_no_echo(state->user.repeatedPassword, PASSWORD_MAX_LEN);
+	switch (err) {
+	case ERR_NONE:
+		break;
+	case ERR_IO_IIN:
+	case ERR_IO_UNKNOWN:
+        error_print(ERR_IO_UNKNOWN);
+		return err;
+	case ERR_IO_IARG:
+		// unreachable because we passed PASSWORD_MAX_LEN as string len
+		UNREACHABLE;
+	default:
+		UNREACHABLE;
+	}
+
+    // Print new line because after user repeats password 
+    // next text was on the same line
+    printf("\n");
+
+    int cmp = strncmp(state->user.password, state->user.repeatedPassword, PASSWORD_MAX_LEN);
+    if (cmp != 0) {
+        error_print(ERR_PASSWORDS_NO_MATCH);
+        return ERR_PASSWORDS_NO_MATCH;
+    }
+
 
 	// TODO send signup message to server and get the user_id back
 	// update user with user_id

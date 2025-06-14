@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include "errors.h"
 
-
 typedef struct {
     uint32_t index;
     char* prompt;
