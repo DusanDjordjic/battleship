@@ -9,7 +9,7 @@
 error_code send_message(int sock_fd, const void* message, uint32_t len) {
     ssize_t sent = send(sock_fd, message, len, 0);
     if ((uint32_t)sent == len) {
-        fprintf(stderr, "Sent a message, len %ld", sent);
+        fprintf(stderr, ">>>>> %d: Sent a message, len %ld\n", sock_fd, sent);
         return ERR_NONE;
     }
 
@@ -39,7 +39,7 @@ error_code read_message(int sock_fd, void* buffer, uint32_t len) {
     }
     
     if (read != -1 && (uint32_t)read <= len) {
-        fprintf(stderr, "Read a message, len %ld", read);
+        fprintf(stderr, "<<<<< %d: Read a message, len %ld\n", sock_fd, read);
         return ERR_NONE;
     }
 

@@ -5,6 +5,9 @@
 
 typedef uint16_t error_code;
 
+char* error_to_string(error_code error);
+void error_print(error_code error);
+
 // Errors that should lead to exiting the program
 // Failed to allocate memory
 #define ERR_ALLOC 1001

@@ -1,3 +1,4 @@
+#include "include/globals.h"
 #include <include/errors.h>
 #include <stdio.h>
 
@@ -37,5 +38,5 @@ char* error_to_string(error_code error)
 
 void error_print(error_code error)
 {
-	fprintf(stderr, "%s\n", error_to_string(error));
+	fprintf(stderr, RED "%s\n" RESET, error_to_string(error));
 }

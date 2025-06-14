@@ -1,5 +1,5 @@
-#include "include/globals.h"
-#include "include/messages.h"
+#include <include/globals.h>
+#include <include/messages.h>
 #include <asm-generic/errno-base.h>
 #include <include/errors.h>
 #include <include/io.h>
@@ -17,10 +17,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define UNREACHABLE                                                 \
-	{                                                               \
-		fprintf(stderr, "UNREACHABLE %s %d\n", __FILE__, __LINE__); \
-		exit(1);                                                    \
+#define UNREACHABLE                                                             \
+	{                                                                           \
+		fprintf(stderr, RED "UNREACHABLE %s %d\n" RESET, __FILE__, __LINE__);   \
+		exit(1);                                                                \
 	}
 
 error_code client_signup(client_state_t* state);
@@ -31,7 +31,7 @@ error_code client_menu_create(menu_t* menu);
 
 void menu_item_display(menu_item_t* item)
 {
-	printf("%d) %s\n", item->index, item->prompt);
+	fprintf(stdout, "%d) %s\n", item->index, item->prompt);
 }
 
 int main(int argc, char** argv)
@@ -47,14 +47,14 @@ int main(int argc, char** argv)
 
 	err = connect_to_server(&state);
 	if (err != ERR_NONE) {
-		fprintf(stderr, "failed to connect to server: error code %d\n", err);
+		fprintf(stderr, RED "ERROR: Failed to connect to server: error code %d\n" RESET, err);
 		return 1;
 	}
 
 	menu_t menu;
 	err = client_menu_create(&menu);
 	if (err != ERR_NONE) {
-		fprintf(stderr, "failed to initalize menu: error code %d\n", err);
+		fprintf(stderr, RED "ERROR: failed to initalize menu: error code %d\n" RESET, err);
 		return 1;
 	}
 
@@ -70,7 +70,8 @@ int main(int argc, char** argv)
             error_print(err);
 			continue;
 		case ERR_ALLOC:
-			fprintf(stderr, "unrecoverable state, closing...");
+            error_print(err);
+			fprintf(stderr, RED "ERROR: Unrecoverable state, closing..." RESET);
 			goto EXIT;
 		case ERR_NONE:
 			break;
@@ -96,7 +97,7 @@ int main(int argc, char** argv)
 
 				break;
 			default:
-				fprintf(stderr, "invalid choice\n");
+				fprintf(stderr, RED "ERROR: Invalid choice\n" RESET);
 				break;
 			case 0:
 				goto EXIT;
@@ -106,16 +107,16 @@ int main(int argc, char** argv)
 		case 1:
 			switch (choice) {
 			case 1:
-				printf("DO LIST OTHER PLAYERS\n");
+				printf(BLUE "DO LIST OTHER PLAYERS\n" RESET);
 				break;
 			case 2:
-				printf("DO CHALLENGE PLAYER\n");
+				printf(BLUE "DO CHALLENGE PLAYER\n" RESET);
 				break;
 			case 3:
-				printf("DO PROFILE SETTINGS\n");
+				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
 				break;
 			default:
-				fprintf(stderr, "invalid choice\n");
+				fprintf(stderr, RED "ERROR: nvalid choice\n" RESET);
 				break;
 			case 0:
 				err = client_logout(&state);
@@ -124,8 +125,8 @@ int main(int argc, char** argv)
 				} else {
 					// we failed to logout but we removed any state we had about user
 					// so we are just going to close the app with an error
-					fprintf(stderr, "we failed to logout and reached unrecoverable "
-									"state, closing...\n");
+					fprintf(stderr, RED "we failed to logout and reached unrecoverable "
+									"state, closing...\n" RESET);
 					goto EXIT;
 				}
 				break;
@@ -184,12 +185,12 @@ error_code connect_to_server(client_state_t* state)
 
 error_code client_login(client_state_t* state)
 {
-	if (state->user.id != 0) {
+	if (state->logged_in) {
 		UNREACHABLE;
 	}
 
-	printf("Login process started\n");
-	printf("Enter username (max %d): ", USERNAME_MAX_LEN);
+	fprintf(stdout, "Login process started\n");
+	fprintf(stdout, "Enter username (max %d): ", USERNAME_MAX_LEN);
 	error_code err = read_line(state->user.username, USERNAME_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
@@ -205,7 +206,7 @@ error_code client_login(client_state_t* state)
 		UNREACHABLE;
 	}
 
-	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
+	fprintf(stdout, "Enter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
 	err = read_line_no_echo(state->user.password, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
@@ -223,7 +224,7 @@ error_code client_login(client_state_t* state)
 
 	// TODO send login message to server and get the user_id back
 	// update user with user_id
-	state->user.id = 1;
+	state->logged_in = 1;
 
 	// Also login will return the api key as well
 	strncpy(state->api_token, "API_T_FROM_SRV", API_KEY_LEN);
@@ -232,26 +233,27 @@ error_code client_login(client_state_t* state)
 
 error_code client_logout(client_state_t* state)
 {
-	if (state->user.id == 0) {
+	if (!state->logged_in) {
 		UNREACHABLE;
 	}
 
 	// TODO Send logout message
 
+    state->logged_in = 0;
 	// Reset info we have about user and api key
-	memset(&state->user, 0, sizeof(user_t));
+	memset(&state->user, 0, sizeof(client_user_t));
 	memset(state->api_token, 0, API_KEY_LEN);
 	return ERR_NONE;
 }
 
 error_code client_signup(client_state_t* state)
 {
-	if (state->user.id != 0) {
+	if (state->logged_in) {
 		UNREACHABLE;
 	}
 
-	printf("Signup process started\n");
-	printf("Enter username (max %d): ", USERNAME_MAX_LEN);
+	fprintf(stdout, "Signup process started\n");
+	fprintf(stdout, "Enter username (max %d): ", USERNAME_MAX_LEN);
 	error_code err = read_line(state->user.username, USERNAME_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
@@ -267,7 +269,7 @@ error_code client_signup(client_state_t* state)
 		UNREACHABLE;
 	}
 
-	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
+	fprintf(stdout, "Enter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
 	err = read_line_no_echo(state->user.password, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
@@ -283,7 +285,7 @@ error_code client_signup(client_state_t* state)
 		UNREACHABLE;
 	}
 
-	printf("\nEnter password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
+	fprintf(stdout, "\nRepeat password (max %d) (HIDDEN): ", PASSWORD_MAX_LEN);
 	err = read_line_no_echo(state->user.repeatedPassword, PASSWORD_MAX_LEN);
 	switch (err) {
 	case ERR_NONE:
@@ -301,7 +303,7 @@ error_code client_signup(client_state_t* state)
 
     // Print new line because after user repeats password 
     // next text was on the same line
-    printf("\n");
+    fprintf(stdout, "\n");
 
     int cmp = strncmp(state->user.password, state->user.repeatedPassword, PASSWORD_MAX_LEN);
     if (cmp != 0) {
@@ -311,12 +313,13 @@ error_code client_signup(client_state_t* state)
 
 
     SignupRequestMessage req; 
+    req.type = MSG_SIGNUP;
     strncpy(req.username, state->user.username, USERNAME_MAX_LEN);
     strncpy(req.password, state->user.password, PASSWORD_MAX_LEN);
     
     err = send_message(state->sock_fd, &req, sizeof(SignupRequestMessage)); 
     if (err != ERR_NONE) {
-        fprintf(stderr, "Failed to send message, %d - %s\n", err, error_to_string(err));
+        fprintf(stderr, RED "ERROR: Failed to send message, %d - %s\n" RESET, err, error_to_string(err));
         return err;
     }
 
@@ -324,13 +327,13 @@ error_code client_signup(client_state_t* state)
     SignupResponseMessage res = { 0 };
     err = read_message(state->sock_fd, &res, sizeof(SignupResponseMessage));
     if (err != ERR_NONE) {
-        fprintf(stderr, "Failed to read message, %d - %s\n", err, error_to_string(err));
+        fprintf(stderr, RED "ERROR: Failed to read message, %d - %s\n" RESET, err, error_to_string(err));
         return err;
     }
    
     
     if (res.error.status_code != STATUS_OK) {
-        fprintf(stderr, "ERROR: Signup request failed, status %d message %s", res.error.status_code, res.error.message);
+        fprintf(stderr, RED "ERROR: Signup request failed, %d - %s\n" RESET, res.error.status_code, res.error.message);
 
         if (res.error.status_code == STATUS_CONFLICT) {
             return ERR_USERNAME_EXISTS;
@@ -339,8 +342,9 @@ error_code client_signup(client_state_t* state)
         return ERR_UNKNOWN;
     }
 
+    fprintf(stdout, GREEN "Signed up successfully\n" RESET);
     
-	state->user.id = res.success.user_id;
+	state->logged_in = 1;
 	strncpy(state->api_token, res.success.api_key, API_KEY_LEN);
 	return ERR_NONE;
 }

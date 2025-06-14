@@ -6,8 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void client_usage(char* exe) { printf("Usage: %s <server_ip> <server_port>\n", exe); }
-void server_usage(char* exe) { printf("Usage: %s <server_port>\n", exe); }
+void client_usage(char* exe) { fprintf(stderr, "Usage: %s <server_ip> <server_port>\n", exe); }
+void server_usage(char* exe) { fprintf(stderr, "Usage: %s <server_port>\n", exe); }
 
 error_code client_parse_args(client_state_t* state, int argc, char** argv)
 {
@@ -46,7 +46,7 @@ error_code server_parse_args(server_state_t* state, int argc, char** argv)
 	uint16_t port;
 	error_code err = parse_port(sport, &port);
 	if (err != ERR_NONE) {
-        // error_print(err);
+        error_print(err);
 		return err;
 	}
 
