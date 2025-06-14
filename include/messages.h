@@ -24,11 +24,27 @@ typedef union {
     ErrorResponseMessage error; 
 } SignupResponseMessage;
 
+typedef struct {
+    uint8_t status_code;
+    char api_key[API_KEY_LEN];
+} LoginSuccessResponseMessage;
+
+typedef union {
+    LoginSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} LoginResponseMessage;
+
 // Requests 
 typedef struct {
     uint8_t type;
     char username[USERNAME_MAX_LEN];
     char password[PASSWORD_MAX_LEN];
 } SignupRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char username[USERNAME_MAX_LEN];
+    char password[PASSWORD_MAX_LEN];
+} LoginRequestMessage;
 
 #endif

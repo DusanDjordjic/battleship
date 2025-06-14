@@ -36,10 +36,16 @@ typedef struct {
 typedef struct {
     int sock_fd; 
 	uint16_t port;
+
     // Array of clients 
     Vector clients;
     // Lock used to limit access to array
     pthread_mutex_t clients_lock;
+    
+    // List of all registered users. 
+    // Loaded from a file at the start of program
+    Vector users;
+    pthread_mutex_t users_lock;
 } server_state_t;
 
 typedef struct {
