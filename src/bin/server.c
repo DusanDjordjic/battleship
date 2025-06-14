@@ -88,7 +88,7 @@ int main(int argc, char** argv)
         } 
 
         if (ret == -1) {
-            fprintf(stderr, "ERROR: select failed, %s\n", strerror(errno));
+            fprintf(stderr, RED "ERROR: select failed, %s\n" RESET, strerror(errno));
             break;
         }
 
