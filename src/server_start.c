@@ -1,11 +1,10 @@
 #include "include/globals.h"
-#include <include/tcp_server.h>
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <unistd.h>
 
 #define ACCEPT_QUEUE_LEN 128
-int start_server(int port)
+int server_start(int port)
 {
 	int server_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (server_fd == 0) {

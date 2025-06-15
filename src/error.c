@@ -31,6 +31,8 @@ char* error_to_string(error_code error)
         return "ERROR: Invalid menu option selected";
     case ERR_PEER_CLOSED:
         return "ERROR: Connection peer closed the connection";
+    case ERR_UNATHORIZED:
+        return "ERROR: Invalid Api key provided";
 	default:
 		return "UNREACHABLE";
 	}

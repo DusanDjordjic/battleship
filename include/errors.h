@@ -39,6 +39,8 @@ void error_print(error_code error);
 #define ERR_PEER_CLOSED 2009
 // Permission denied 
 #define ERR_PERMISSION_DENIED 2010
+// Unauthorized
+#define ERR_UNATHORIZED 2011
 
 // Server Errors 
 #define ERR_USERNAME_EXISTS 3001

@@ -34,6 +34,25 @@ typedef union {
     ErrorResponseMessage error; 
 } LoginResponseMessage;
 
+typedef struct {
+    uint8_t status_code;
+} LogoutSuccessResponseMessage;
+
+typedef union {
+    LogoutSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} LogoutResponseMessage;
+
+typedef struct {
+    uint8_t status_code;
+    uint32_t count;
+} ListUsersSuccessResponseMessage;
+
+typedef union {
+    ListUsersSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} ListUsersResponseMessage;
+
 // Requests 
 typedef struct {
     uint8_t type;
@@ -46,5 +65,15 @@ typedef struct {
     char username[USERNAME_MAX_LEN];
     char password[PASSWORD_MAX_LEN];
 } LoginRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+} LogoutRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+} ListUsersRequestMessage;
 
 #endif

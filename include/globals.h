@@ -13,6 +13,8 @@
 // Message types 
 #define MSG_SIGNUP 1
 #define MSG_LOGIN 2
+#define MSG_LOGOUT 3
+#define MSG_LIST_USERS 4
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -22,6 +24,8 @@
 #define STATUS_NOT_FOUND 3
 // Provided token is invalid
 #define STATUS_UNAUTHORIZED 4
+// Client sent a bad request (login while already logged in, etc...)
+#define STATUS_BAD_REQUEST 5
 
 // Unknown error
 #define STATUS_UNKNOWN_ERROR 255 

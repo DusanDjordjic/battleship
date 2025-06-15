@@ -1,7 +1,6 @@
 #include <include/users.h>
 #include "include/errors.h"
 #include "include/globals.h"
-#include "include/state.h"
 #include "include/vector/vector.h"
 #include <stdint.h>
 #include <stdio.h>

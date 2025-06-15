@@ -1,3 +1,7 @@
 Checks: 'readability-*,clang-diagnostic-*,clang-analyzer-*,bugprone-*'
 WarningsAsErrors: 'clang-diagnostic-*'
 ExtraArgs: ['-Wall', '-Wextra']
+CompilerOptions:
+  ExtraArgs:
+    - -D_GNU_SOURCE
+    - -Wno-unused-parameter

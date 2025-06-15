@@ -1,10 +1,9 @@
-#include "include/users.h"
-#include <asm-generic/errno-base.h>
-#include <bits/types/sigset_t.h>
+#include <include/users.h>
+#include <include/server_handlers.h>
 #include <errno.h>
 #include <include/globals.h>
 #include <include/messages.h>
-#include <include/tcp_server.h>
+#include <include/server.h>
 #include <assert.h>
 #include <include/args.h>
 #include <include/errors.h>
@@ -18,23 +17,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/poll.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <poll.h>
+#include <sys/poll.h>
 
 #define USERS_FILEPATH "./users.db"
 
-void client_deinit(void* elem)
-{
-    client_state_t* client = elem;
-    close(client->sock_fd);
-	fprintf(stdout, "Closing client %d\n", client->sock_fd);
-}
-
 void* handle_client_connetion(void* params);
-SignupResponseMessage handle_signup_request(server_client_t* client, const char* buffer);
 void generate_random_hex_string(char* buffer, uint32_t len);
 
 volatile sig_atomic_t interrupted = 0;
@@ -45,6 +35,8 @@ void handle_sigint(int sig) {
 
 int main(int argc, char** argv)
 {
+    srand(time(NULL));
+
     // Need to register a signal handler so that poll will 
     // catch the signal and return EINTR
     signal(SIGINT, handle_sigint);
@@ -67,7 +59,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-	state.sock_fd = start_server(state.port);
+	state.sock_fd = server_start(state.port);
 	if (state.sock_fd == -1) {
 		fprintf(stderr, RED "ERROR: Failed to start server\n" RESET);
         return 1;
@@ -76,7 +68,7 @@ int main(int argc, char** argv)
     fprintf(stdout, "Server started on port %u\n", state.port);
 
     struct pollfd server_poll_fd = { .fd = state.sock_fd, .events = POLLIN };
-    
+
 	while (!interrupted) {
         int ret = poll(&server_poll_fd, 1, -1);
         if (ret == -1 && errno == EINTR) {
@@ -120,7 +112,7 @@ int main(int argc, char** argv)
     }
 
 	close(state.sock_fd);
-	vector_destroy(&state.clients, client_deinit);
+	vector_destroy(&state.clients, NULL);
 	vector_destroy(&state.users, NULL);
 	pthread_mutex_destroy(&state.clients_lock);
 	return 0;
@@ -151,119 +143,66 @@ void* handle_client_connetion(void* params)
             continue;
         }
 
-        // Parse message
+        // Parse message type
         uint8_t message_type = *((uint8_t*)(buffer));
         switch (message_type) {
             case MSG_SIGNUP: {
                 fprintf(stdout, "CLIENT %d: Received signup request\n", client->sock_fd);
-                SignupResponseMessage res = handle_signup_request(client, buffer);
-                error_code err = send_message(client->sock_fd, &res, sizeof(SignupResponseMessage));
+                error_code err = handle_signup_request(client, buffer);
                 if (err != ERR_NONE) {
-                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send signup response, %d - %s\n" RESET, client->sock_fd, err, error_to_string(err));
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send signup response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
                 }
 
-                // Save client to server state users array and to a file
                 break;
             }
 
-            case MSG_LOGIN:
-            default:
+            case MSG_LOGIN: {
+                fprintf(stdout, "CLIENT %d: Received login request\n", client->sock_fd);
+                error_code err = handle_login_request(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send login response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+
+                break;
+            }
+            case MSG_LOGOUT: {
+                fprintf(stdout, "CLIENT %d: Received logout request\n", client->sock_fd);
+                error_code err = handle_logout_request(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send login response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+
+                break;
+            }
+            case MSG_LIST_USERS: {
+                fprintf(stdout, "CLIENT %d: Received list users request\n", client->sock_fd);
+                error_code err = handle_list_users(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send login response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+
+                break;
+            }
+            default: {
                 fprintf(stderr, RED "ERROR: CLIENT %d: Message type is unknown %u\n" RESET, client->sock_fd, message_type);
+                error_code err = handle_unknown_request(client);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send message type unknown response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+            }
         }
     }
 
+    close(client->sock_fd);
+    client->logged_in = 0;
+    client->sock_fd = -1;
+
     // TODO remove client from vector
-
 	return NULL;
-}
-
-SignupResponseMessage handle_signup_request(server_client_t* client, const char* buffer) {
-    SignupRequestMessage req = *(SignupRequestMessage*)(buffer);
-   
-    pthread_mutex_lock(&client->state->users_lock);
-
-    char found = 0;
-    for (unsigned int i = 0; i < client->state->users.logical_length ; i++ ) {
-         server_user_t* user = vector_at(&client->state->users, i);
-         if (strncmp(req.username, user->username, USERNAME_MAX_LEN) == 0) {
-             found = 1;
-         }
-
-         if (found) {
-             break;
-         }
-    }
-    pthread_mutex_unlock(&client->state->users_lock);
-
-    SignupResponseMessage res = {0};
-    if (found) {
-        res.error.status_code = STATUS_CONFLICT;
-        sprintf(res.error.message, "Username %s already exists", req.username);
-        fprintf(stderr, RED "ERROR: CLIENT %d: User signup failed, %d - %s\n" RESET,
-                client->sock_fd, res.error.status_code, res.error.message);
-        return res;
-    }
-    
-    strncpy(client->user.username, req.username, USERNAME_MAX_LEN);
-    strncpy(client->user.password, req.password, PASSWORD_MAX_LEN);
-
-    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" signed up\n" RESET, client->sock_fd,client->user.username);
-   
-    pthread_mutex_lock(&client->state->users_lock);
-    vector_push(&(client->state->users), &client->user);
-    pthread_mutex_unlock(&client->state->users_lock);
-    
-    res.success.status_code = STATUS_OK;
-    generate_random_hex_string(res.success.api_key, API_KEY_LEN);
-    return res;
-}
-
-LoginResponseMessage handle_login_request(server_client_t* client, const char* buffer) {
-    LoginRequestMessage req = *(LoginRequestMessage*)(buffer);
-   
-    pthread_mutex_lock(&client->state->clients_lock);
-
-    char found = 0;
-    server_client_t* existingClient = NULL;
-    for (unsigned int i = 0; i < client->state->clients.logical_length ; i++ ) {
-         existingClient = vector_at(&client->state->clients, i);
-         if (strncmp(req.username, existingClient->user.username, USERNAME_MAX_LEN) == 0) {
-             found = 1;
-         }
-
-         if (found) {
-             break;
-         }
-    }
-    pthread_mutex_unlock(&client->state->clients_lock);
-
-    LoginResponseMessage res = {0};
-    if (!found) {
-        res.error.status_code = STATUS_NOT_FOUND;
-        sprintf(res.error.message, "Failed to find user with username \"%s\"", req.username);
-        fprintf(stderr, RED "ERROR: CLIENT %d: User signup failed, %d - %s\n" RESET,
-                client->sock_fd, res.error.status_code, res.error.message);
-        return res;
-    }
-
-    
-    strncpy(client->user.username, req.username, USERNAME_MAX_LEN);
-    strncpy(client->user.password, req.password, PASSWORD_MAX_LEN);
-
-    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" signed up\n" RESET, client->sock_fd,client->user.username);
-    
-    res.success.status_code = STATUS_OK;
-    generate_random_hex_string(res.success.api_key, API_KEY_LEN);
-    return res;
-}
-
-#define BYTE_MAX 256
-void generate_random_hex_string(char* buffer, uint32_t len) {
-    uint32_t half = len / 2;
-
-    for (size_t i = 0; i < half; i++) {
-        uint8_t byte = (uint8_t)(rand() % BYTE_MAX);
-        sprintf(buffer + (i * 2), "%02x", byte);
-    }
 }
 
