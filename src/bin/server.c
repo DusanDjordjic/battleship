@@ -18,10 +18,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <time.h>
 #include <unistd.h>
-#include <sys/select.h>
+#include <poll.h>
 
 #define USERS_FILEPATH "./users.db"
 
@@ -44,7 +45,8 @@ void handle_sigint(int sig) {
 
 int main(int argc, char** argv)
 {
-    // On sigint set interrupted to non zero value
+    // Need to register a signal handler so that poll will 
+    // catch the signal and return EINTR
     signal(SIGINT, handle_sigint);
 
 	server_state_t state = { 0 };
@@ -73,57 +75,44 @@ int main(int argc, char** argv)
 
     fprintf(stdout, "Server started on port %u\n", state.port);
 
-    fd_set readfds;
-
-    // Try until we are interrupted or an error happens 
-	while (!interrupted) {
-
-        // Select modifies readfds so we need to set it everytime
-        FD_SET(state.sock_fd, &readfds);
+    struct pollfd server_poll_fd = { .fd = state.sock_fd, .events = POLLIN };
     
-        // Select will return -1 if we receive an interrupt
-        int ret = select(state.sock_fd + 1, &readfds, NULL, NULL, NULL);
+	while (!interrupted) {
+        int ret = poll(&server_poll_fd, 1, -1);
         if (ret == -1 && errno == EINTR) {
             break;
         } 
 
-        if (ret == -1) {
-            fprintf(stderr, RED "ERROR: select failed, %s\n" RESET, strerror(errno));
-            break;
+        if (server_poll_fd.revents & POLLIN) {
+            struct sockaddr_in client_addr;
+            socklen_t len = sizeof(client_addr);
+
+            int client_sock_fd = accept(state.sock_fd, (struct sockaddr*)&client_addr, &len);
+            if (client_sock_fd == -1) {
+                fprintf(stderr, RED "ERROR: Failed to accept connection\n" RESET);
+                break;
+            }
+
+            server_client_t new_client =  {
+                .sock_fd = client_sock_fd,
+                .state = &state,
+                .addr = client_addr,
+                .logged_in = 0,
+            };
+
+            pthread_mutex_lock(&state.clients_lock);
+
+            vector_push(&state.clients, &new_client);
+            server_client_t* client_p = vector_at(&state.clients, state.clients.logical_length - 1);
+
+            pthread_mutex_unlock(&state.clients_lock);
+
+            pthread_create(&(client_p->handler_thread), NULL, handle_client_connetion, client_p);
+            pthread_detach(client_p->handler_thread);
         }
-
-        if (!FD_ISSET(state.sock_fd, &readfds)) {
-            continue;
-        }
-
-		struct sockaddr_in client_addr;
-		socklen_t len = sizeof(client_addr);
-
-		int client_sock_fd = accept(state.sock_fd, (struct sockaddr*)&client_addr, &len);
-		if (client_sock_fd == -1) {
-			fprintf(stderr, RED "ERROR: Failed to accept connection\n" RESET);
-            break;
-		}
-
-		server_client_t new_client =  {
-			.sock_fd = client_sock_fd,
-			.state = &state,
-			.addr = client_addr,
-			.logged_in = 0,
-		};
-
-		pthread_mutex_lock(&state.clients_lock);
-
-		vector_push(&state.clients, &new_client);
-		server_client_t* client_p = vector_at(&state.clients, state.clients.logical_length - 1);
-
-		pthread_mutex_unlock(&state.clients_lock);
-
-		pthread_create(&(client_p->handler_thread), NULL, handle_client_connetion, client_p);
-		pthread_detach(client_p->handler_thread);
 	}
 
-    fprintf(stderr, "\nInterrupted %d: Stopping server..\n", interrupted);
+    fprintf(stderr, "\nStopping server..\n");
 
     err = users_save(&state.users, USERS_FILEPATH);
     if (err != ERR_NONE) {

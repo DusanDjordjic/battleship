@@ -1,10 +1,10 @@
 // tests/test_tcp_server.c
-#include <criterion/criterion.h>
-#include <criterion/logging.h>
+#include <include/criterion/criterion.h>
+#include <include/criterion/logging.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "tcp_server.h"
+#include "include/tcp_server.h"
 
 #define TEST_PORT 8080
 
