@@ -215,6 +215,8 @@ void generate_random_hex_string(char* buffer, uint32_t len) {
         uint8_t byte = (uint8_t)(rand() % BYTE_MAX);
         sprintf(buffer + (i * 2), "%02x", byte);
     }
+
+    buffer[len] = '\0';
 }
 
 error_code handle_list_users (server_client_t* client, const char* buffer) {
