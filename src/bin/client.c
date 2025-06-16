@@ -1,3 +1,4 @@
+#include <pthread.h>
 #include <include/globals.h>
 #include <include/messages.h>
 #include <asm-generic/errno-base.h>
@@ -11,6 +12,7 @@
 #include <include/state.h>
 #include <ncurses.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,9 +29,12 @@ error_code client_signup(client_state_t* state);
 error_code client_login(client_state_t* state);
 error_code client_logout(client_state_t* state);
 error_code client_list_users(client_state_t* state);
+error_code client_look_for_game(client_state_t* state);
+error_code client_cancel_look_for_game(client_state_t* state);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
+void* print_loading(void* param);
 
 void menu_item_display(menu_item_t* item)
 {
@@ -112,9 +117,12 @@ int main(int argc, char** argv)
                 client_list_users(&state);
 				break;
 			case 2:
-				printf(BLUE "DO CHALLENGE PLAYER\n" RESET);
+                client_look_for_game(&state);
 				break;
 			case 3:
+				printf(BLUE "DO CHALLENGE PLAYER\n" RESET);
+				break;
+			case 4:
 				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
 				break;
 			default:
@@ -444,22 +452,151 @@ error_code client_list_users(client_state_t* state) {
 
     char username[USERNAME_MAX_LEN];
 
-    fprintf(stdout, "Listing %u users:\n", res.success.count);
-    fprintf(stdout, "========================\n");
+    fprintf(stdout, "Listing %u users\n(Green looking for games):\n", res.success.count);
+    fprintf(stdout, "==========================\n");
 
+    uint8_t looking_for_game = 0;
     for (uint32_t i = 0; i < res.success.count; i++) {
+        err = read_message(state->sock_fd, &looking_for_game, sizeof(looking_for_game));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s Failed to looking for game\n" RESET, error_to_string(err));
+            return err;
+        }
+
         err = read_message(state->sock_fd, username, USERNAME_MAX_LEN);
         if (err != ERR_NONE) {
             fprintf(stderr, RED "%s Failed to read username\n" RESET, error_to_string(err));
             return err;
         }
 
-        fprintf(stdout, "\"%s\"\n", username);
+        if (looking_for_game) {
+            fprintf(stdout, GREEN "\"%s\"\n" RESET, username);
+        } else {
+            fprintf(stdout, "\"%s\"\n", username);
+        }
     }
 
-    fprintf(stdout, "========================\n");
+    fprintf(stdout, "==========================\n");
 
     return ERR_NONE;
+}
+
+error_code client_cancel_look_for_game(client_state_t* state) {
+    CancelLookForGameRequestMessage req;
+    req.type = MSG_CANCEL_LOOK_FOR_GAME;
+    strncpy(req.api_key, state->api_key, API_KEY_LEN);
+
+    error_code err = send_message(state->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to send cancel look for game request\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    CancelLookForGameResponseMessage res;
+    err = read_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read cancel look for game response\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.error.status_code != STATUS_OK) {
+        fprintf(stderr, RED "ERROR: Cancel look for game request failed, %d - %s\n" RESET, res.error.status_code, res.error.message);
+
+        if (res.error.status_code == STATUS_UNAUTHORIZED) {
+            return ERR_UNATHORIZED;
+        }
+
+        return ERR_UNKNOWN;
+    }
+
+    return ERR_NONE;
+}
+
+error_code client_look_for_game(client_state_t* state) {
+    LookForGameRequestMessage req;
+    req.type = MSG_LOOK_FOR_GAME;
+    strncpy(req.api_key, state->api_key, API_KEY_LEN);
+
+    error_code err = send_message(state->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to send look for game request\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    LookForGameResponseMessage res;
+    err = read_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read look for game response\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.error.status_code != STATUS_OK) {
+        fprintf(stderr, RED "ERROR: Look for game request failed, %d - %s\n" RESET, res.error.status_code, res.error.message);
+
+        if (res.error.status_code == STATUS_UNAUTHORIZED) {
+            return ERR_UNATHORIZED;
+        }
+
+        return ERR_UNKNOWN;
+    }
+
+    fprintf(stdout, "Looking for game (press q to cancel)\n");
+
+    pthread_t loading_thread;
+    int timeout = 300000;
+    pthread_create(&loading_thread, NULL, print_loading, &timeout);
+
+    char cmd;
+    while (1) {
+        read_char_raw(&cmd);
+
+        if (err == ERR_IIN) {
+            error_print(err);
+            continue;
+        }
+
+        if (err == ERR_UNKNOWN) {
+            error_print(err);
+            break;
+        }
+
+        if (cmd == 'q') {
+            break;
+        } 
+
+        fprintf(stderr, RED "ERROR: %c is invalid command\n" RESET, cmd);
+    }
+
+    // Print new line so that menu appears other dots
+    fprintf(stdout, "\n");
+
+    pthread_cancel(loading_thread);
+    pthread_join(loading_thread, NULL);
+
+    // Did user press q to cancel, if he did then send the cancel look for game request
+    if (cmd == 'q') {
+        return client_cancel_look_for_game(state);
+    }
+
+    return ERR_NONE;
+}
+
+void* print_loading(void* param) {
+    int timeout = *(int*)param;
+    
+    while(1) {
+        for (int j = 0; j < 10; j++) {
+            putchar('.');
+            fflush(stdout);
+            usleep(timeout); // 0.5-second delay
+        }
+
+        // Move back to start of the line to clear
+        printf("\r          \r"); // Carriage return + clearing spaces
+        fflush(stdout);
+    }
+
+    return NULL;
 }
 
 error_code client_menu_create(menu_t* menu)
@@ -494,7 +631,7 @@ error_code client_menu_create(menu_t* menu)
 
 	{
 		menu_page_t page;
-		err = menu_page_init(&page, 4);
+		err = menu_page_init(&page, 5);
 		if (err != ERR_NONE) {
 			return err;
 		}
@@ -504,11 +641,15 @@ error_code client_menu_create(menu_t* menu)
 			menu_page_add_item(&page, item);
 		}
 		{
-			menu_item_t item = { .index = 2, .prompt = "Challenge other player" };
+			menu_item_t item = { .index = 2, .prompt = "Look for game" };
 			menu_page_add_item(&page, item);
 		}
 		{
-			menu_item_t item = { .index = 3, .prompt = "Profile settings" };
+			menu_item_t item = { .index = 3, .prompt = "Challenge other player" };
+			menu_page_add_item(&page, item);
+		}
+		{
+			menu_item_t item = { .index = 4, .prompt = "Profile settings" };
 			menu_page_add_item(&page, item);
 		}
 		{

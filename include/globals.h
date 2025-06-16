@@ -15,6 +15,9 @@
 #define MSG_LOGIN 2
 #define MSG_LOGOUT 3
 #define MSG_LIST_USERS 4
+#define MSG_LOOK_FOR_GAME 5
+#define MSG_CANCEL_LOOK_FOR_GAME 6
+#define MSG_CHALLENGE 7
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -41,4 +44,8 @@
 #define BLUE  "\033[34m"
 #define RESET "\033[0m"
 
+
+// Client flags 
+#define CLIENT_LOGGED_IN (1 << 0)
+#define CLIENT_LOOKING_FOR_GAME (1 << 1)
 #endif

@@ -89,7 +89,7 @@ int main(int argc, char** argv)
                 .sock_fd = client_sock_fd,
                 .state = &state,
                 .addr = client_addr,
-                .logged_in = 0,
+                .flags = 0,
             };
 
             pthread_mutex_lock(&state.clients_lock);
@@ -187,6 +187,34 @@ void* handle_client_connetion(void* params)
 
                 break;
             }
+            case MSG_LOOK_FOR_GAME: {
+                fprintf(stdout, "CLIENT %d: Received look for game request\n", client->sock_fd);
+                error_code err = handle_look_for_game(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send look for game response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
+            case MSG_CANCEL_LOOK_FOR_GAME: {
+                fprintf(stdout, "CLIENT %d: Received cancel look for game request\n", client->sock_fd);
+                error_code err = handle_cancel_look_for_game(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send cancel look for game response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
+            case MSG_CHALLENGE: {
+                fprintf(stdout, "CLIENT %d: Received challenge player request\n", client->sock_fd);
+                error_code err =  handle_look_for_game(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send challenge player response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
+
             default: {
                 fprintf(stderr, RED "ERROR: CLIENT %d: Message type is unknown %u\n" RESET, client->sock_fd, message_type);
                 error_code err = handle_unknown_request(client);
@@ -199,7 +227,7 @@ void* handle_client_connetion(void* params)
     }
 
     close(client->sock_fd);
-    client->logged_in = 0;
+    client->flags = 0;
     client->sock_fd = -1;
 
     // TODO remove client from vector

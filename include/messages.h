@@ -53,6 +53,33 @@ typedef union {
     ErrorResponseMessage error; 
 } ListUsersResponseMessage;
 
+typedef struct {
+    uint8_t status_code;
+} LookForGameSuccessResponseMessage;
+
+typedef union {
+    LookForGameSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} LookForGameResponseMessage;
+
+typedef struct {
+    uint8_t status_code;
+} CancelLookForGameSuccessResponseMessage;
+
+typedef union {
+    CancelLookForGameSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} CancelLookForGameResponseMessage;
+
+typedef struct {
+    uint8_t status_code;
+} ChallengeSuccessResponseMessage;
+
+typedef union {
+    ChallengeSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} ChallengeResponseMessage;
+
 // Requests 
 typedef struct {
     uint8_t type;
@@ -75,5 +102,21 @@ typedef struct {
     uint8_t type;
     char api_key[API_KEY_LEN];
 } ListUsersRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+} LookForGameRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+} CancelLookForGameRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+    char target_username[USERNAME_MAX_LEN];
+} ChallengeRequestMessage;
 
 #endif

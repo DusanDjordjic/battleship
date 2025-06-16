@@ -53,7 +53,7 @@ typedef struct {
 	int sock_fd;
 	struct sockaddr_in addr;
     char api_key[API_KEY_LEN];
-	uint8_t logged_in;
+    uint32_t flags;
 } server_client_t;
 
 #endif

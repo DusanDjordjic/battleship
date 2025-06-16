@@ -136,3 +136,20 @@ error_code read_int32(int32_t* out)
 	*out = 0;
 	return ERR_NONE;
 }
+
+error_code read_char_raw(char* c) {
+    struct termios new;
+    struct termios old;
+    tcgetattr(STDIN_FILENO, &old); 
+    new = old;
+
+    new.c_lflag &= ~(ICANON | ECHO);
+
+    tcsetattr(STDIN_FILENO, TCSANOW, &new);
+
+    *c = getchar();
+     
+    tcsetattr(STDIN_FILENO, TCSANOW, &old);
+
+    return ERR_NONE;
+}
