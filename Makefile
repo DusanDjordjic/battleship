@@ -4,7 +4,7 @@ CC=gcc
 CFLAGS=-Wall -Wextra -I$(CWD) -Wpedantic
 # LFLAGS=-pthread -lncurses
 LFLAGS=-pthread -lvector -L$(CWD)/external/vector -Wl,-rpath,$(CWD)/external/vector 
-TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -I$(CWD) -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2, 
+TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -I$(CWD) -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
 
 # Folders
 SRC=src

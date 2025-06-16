@@ -4,12 +4,12 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
-#include "include/tcp_server.h"
+#include <include/server.h>
 
 #define TEST_PORT 8080
 
 Test(tcp_server, starts_successfully) {
-    int server_fd = start_server(TEST_PORT);
+    int server_fd = server_start(TEST_PORT);
     cr_assert(server_fd > 0, "Failed to start server!");
 
     // Test if the server is listening
