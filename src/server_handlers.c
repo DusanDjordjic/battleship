@@ -157,7 +157,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
     generate_random_hex_string(client->api_key, API_KEY_LEN);
 
     client->flags |= CLIENT_LOGGED_IN;
-
+     
     fprintf(stderr, GREEN "CLIENT %d: User \"%s\" logged in\n" RESET, client->sock_fd,client->user.username);
     
     res.success.status_code = STATUS_OK;
@@ -279,7 +279,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
     }
 
     for (uint32_t i = 0; i < client->state->clients.logical_length; i++) {
-        server_client_t* other= vector_at(&client->state->clients, i);
+        server_client_t* other = vector_at(&client->state->clients, i);
 
         // skip clients that are not logged in
         if (!(other->flags & CLIENT_LOGGED_IN)) {
@@ -397,9 +397,9 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
     return ERR_NONE;
 }
 
-error_code handle_challenge(server_client_t* client, const char* buffer) {
+error_code handle_challenge_player(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
-    ChallengeResponseMessage res = { 0 };
+    ChallengePlayerResponseMessage res = { 0 };
 
     if (!(client->flags & CLIENT_LOGGED_IN)) {
         res.error.status_code = STATUS_UNAUTHORIZED;
@@ -412,7 +412,7 @@ error_code handle_challenge(server_client_t* client, const char* buffer) {
         return err;
     }
 
-    ChallengeRequestMessage req = *(ChallengeRequestMessage*)(buffer);
+    ChallengePlayerRequestMessage req = *(ChallengePlayerRequestMessage*)(buffer);
     if (strncmp(req.api_key, client->api_key, API_KEY_LEN) != 0) {
         res.error.status_code = STATUS_UNAUTHORIZED;
         sprintf(res.error.message, "Invalid api token");
@@ -421,6 +421,77 @@ error_code handle_challenge(server_client_t* client, const char* buffer) {
         if (err != ERR_NONE) {
             fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
         }
+
+        return err;
+    }
+
+    
+    // Go through all connected clients and check if one of them matches the requested one and its looking for game
+    server_client_t* other = NULL;
+    uint8_t found = 0;
+
+    pthread_mutex_lock(&client->state->clients_lock);
+
+    for (uint32_t i = 0; i < client->state->clients.logical_length; i++) {
+        other = vector_at(&client->state->clients, i);
+
+        if (client == other) {
+            continue;
+        }
+    
+        // TODO: remove when we switch to using linked lists for storage of clients
+        if (other->sock_fd == -1) {
+            continue;
+        }
+
+        if (strncmp(other->user.username, req.target_username, USERNAME_MAX_LEN) == 0) {
+            found = 1;
+            break;
+        }
+    }
+
+    pthread_mutex_unlock(&client->state->clients_lock);
+
+    if (found == 0) {
+        res.error.status_code = STATUS_NOT_FOUND;
+        sprintf(res.error.message, "Player \"%s\" doesn't exist", req.target_username);
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        }
+        return err;
+    }
+
+    if (other == NULL) {
+        UNREACHABLE;
+    }
+
+    if (!(other->flags & CLIENT_LOGGED_IN)) {
+        res.error.status_code = STATUS_PLAYER_IS_NOT_CONNECTED;
+        sprintf(res.error.message, "Player \"%s\" is not connected", other->user.username);
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        }
+        return err;
+    }
+
+    if (!(other->flags & CLIENT_LOOKING_FOR_GAME)){
+        res.error.status_code = STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME;
+        sprintf(res.error.message, "Player \"%s\" is not looking a for game", other->user.username);
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        }
+        return err;
+    }
+
+    res.success.status_code = STATUS_OK;
+    res.success.lobby_id = 10;
+
+    err = send_message(client->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
         return err;
     }
 

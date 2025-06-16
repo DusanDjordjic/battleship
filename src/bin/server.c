@@ -84,18 +84,38 @@ int main(int argc, char** argv)
                 fprintf(stderr, RED "ERROR: Failed to accept connection\n" RESET);
                 break;
             }
-
-            server_client_t new_client =  {
-                .sock_fd = client_sock_fd,
-                .state = &state,
-                .addr = client_addr,
-                .flags = 0,
-            };
-
+    
+            // try to find disconnected client;
+        
             pthread_mutex_lock(&state.clients_lock);
 
-            vector_push(&state.clients, &new_client);
-            server_client_t* client_p = vector_at(&state.clients, state.clients.logical_length - 1);
+            server_client_t* client_p = NULL;
+            for (uint32_t i = 0; i < state.clients.logical_length; i++) {
+                server_client_t* client = vector_at(&state.clients, i);
+                if (client->sock_fd == -1) {
+                    fprintf(stdout, "Found free space for client at index %d, vector len %d\n", i, state.clients.logical_length);
+                    // this is free space that we can use
+                    client->sock_fd = client_sock_fd;
+                    client->state = &state;
+                    client->addr = client_addr;
+                    client->flags = 0;
+                    client_p = client;
+                    break;
+                }
+            }
+
+            if (client_p == NULL) {
+                // if we didn't find free space add one more
+                server_client_t new_client =  {
+                    .sock_fd = client_sock_fd,
+                    .state = &state,
+                    .addr = client_addr,
+                    .flags = 0,
+                };
+                vector_push(&state.clients, &new_client);
+                client_p = vector_at(&state.clients, state.clients.logical_length - 1);
+                fprintf(stdout, "Didn't find free space for client, new vector len %d\n", state.clients.logical_length);
+            }
 
             pthread_mutex_unlock(&state.clients_lock);
 
@@ -115,6 +135,8 @@ int main(int argc, char** argv)
 	vector_destroy(&state.clients, NULL);
 	vector_destroy(&state.users, NULL);
 	pthread_mutex_destroy(&state.clients_lock);
+	pthread_mutex_destroy(&state.users_lock);
+
 	return 0;
 }
 
@@ -205,9 +227,9 @@ void* handle_client_connetion(void* params)
                 }
                 break;
             }
-            case MSG_CHALLENGE: {
+            case MSG_CHALLENGE_PLAYER: {
                 fprintf(stdout, "CLIENT %d: Received challenge player request\n", client->sock_fd);
-                error_code err =  handle_look_for_game(client, buffer);
+                error_code err =  handle_challenge_player(client, buffer);
                 if (err != ERR_NONE) {
                     fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send challenge player response, %d - %s\n" RESET,
                             client->sock_fd, err, error_to_string(err));
@@ -230,7 +252,7 @@ void* handle_client_connetion(void* params)
     client->flags = 0;
     client->sock_fd = -1;
 
-    // TODO remove client from vector
+    // TODO Switch from vec to using linked list
 	return NULL;
 }
 

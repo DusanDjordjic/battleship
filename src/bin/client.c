@@ -14,16 +14,9 @@
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-
-#define UNREACHABLE                                                             \
-	{                                                                           \
-		fprintf(stderr, RED "UNREACHABLE %s %d\n" RESET, __FILE__, __LINE__);   \
-		exit(1);                                                                \
-	}
 
 error_code client_signup(client_state_t* state);
 error_code client_login(client_state_t* state);
@@ -31,6 +24,7 @@ error_code client_logout(client_state_t* state);
 error_code client_list_users(client_state_t* state);
 error_code client_look_for_game(client_state_t* state);
 error_code client_cancel_look_for_game(client_state_t* state);
+error_code client_challenge_player(client_state_t* state);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
@@ -120,7 +114,7 @@ int main(int argc, char** argv)
                 client_look_for_game(&state);
 				break;
 			case 3:
-				printf(BLUE "DO CHALLENGE PLAYER\n" RESET);
+                client_challenge_player(&state);
 				break;
 			case 4:
 				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
@@ -577,6 +571,63 @@ error_code client_look_for_game(client_state_t* state) {
     if (cmd == 'q') {
         return client_cancel_look_for_game(state);
     }
+
+    return ERR_NONE;
+}
+
+
+error_code client_challenge_player(client_state_t* state) {
+	fprintf(stdout, "Enter player's username you whish to challenge (max %d): ", USERNAME_MAX_LEN);
+
+    char target[USERNAME_MAX_LEN];
+	error_code err = read_line(target, USERNAME_MAX_LEN);
+	switch (err) {
+	case ERR_NONE:
+		break;
+	case ERR_IIN:
+	case ERR_UNKNOWN:
+        error_print(err);
+		return err;
+	default:
+		UNREACHABLE;
+	}
+
+    ChallengePlayerRequestMessage req;
+    req.type = MSG_CHALLENGE_PLAYER;
+    strncpy(req.api_key, state->api_key, API_KEY_LEN);
+    strncpy(req.target_username, target, USERNAME_MAX_LEN);
+
+    err = send_message(state->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to send challenge player request\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    ChallengePlayerResponseMessage res;
+    err = read_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read challenge player request\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.error.status_code != STATUS_OK) {
+        if (res.error.status_code == STATUS_NOT_FOUND 
+            || res.error.status_code == STATUS_PLAYER_IS_NOT_CONNECTED
+            || res.error.status_code == STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME) {
+            fprintf(stderr, RED "ERROR: %s\n" RESET, res.error.message);
+            return err;
+        }
+
+        fprintf(stderr, RED "ERROR: Look for game request failed, %d - %s\n" RESET, res.error.status_code, res.error.message);
+
+        if (res.error.status_code == STATUS_UNAUTHORIZED) {
+            return ERR_UNATHORIZED;
+        }
+
+        return ERR_UNKNOWN;
+    }
+
+    fprintf(stdout, GREEN "Challenge accepted, entering lobby %d\n" RESET, res.success.lobby_id);
 
     return ERR_NONE;
 }

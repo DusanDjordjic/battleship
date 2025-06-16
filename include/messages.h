@@ -73,12 +73,13 @@ typedef union {
 
 typedef struct {
     uint8_t status_code;
-} ChallengeSuccessResponseMessage;
+    uint32_t lobby_id;
+} LobbyIDResponse;
 
 typedef union {
-    ChallengeSuccessResponseMessage success;
+    LobbyIDResponse success;
     ErrorResponseMessage error; 
-} ChallengeResponseMessage;
+} ChallengePlayerResponseMessage;
 
 // Requests 
 typedef struct {
@@ -117,6 +118,6 @@ typedef struct {
     uint8_t type;
     char api_key[API_KEY_LEN];
     char target_username[USERNAME_MAX_LEN];
-} ChallengeRequestMessage;
+} ChallengePlayerRequestMessage;
 
 #endif

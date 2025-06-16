@@ -1,6 +1,14 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include <stdlib.h>
+
+#define UNREACHABLE                                                             \
+	{                                                                           \
+		fprintf(stderr, RED "UNREACHABLE %s %d\n" RESET, __FILE__, __LINE__);   \
+		exit(1);                                                                \
+	}
+
 #define PORT_BASE 10
 #define PORT_MAX ((1 << 16) - 1)
 
@@ -17,7 +25,7 @@
 #define MSG_LIST_USERS 4
 #define MSG_LOOK_FOR_GAME 5
 #define MSG_CANCEL_LOOK_FOR_GAME 6
-#define MSG_CHALLENGE 7
+#define MSG_CHALLENGE_PLAYER 7
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -29,6 +37,10 @@
 #define STATUS_UNAUTHORIZED 4
 // Client sent a bad request (login while already logged in, etc...)
 #define STATUS_BAD_REQUEST 5
+// Client sent a bad request (login while already logged in, etc...)
+#define STATUS_PLAYER_IS_NOT_CONNECTED 6
+// Client sent a bad request (login while already logged in, etc...)
+#define STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME 7
 
 // Unknown error
 #define STATUS_UNKNOWN_ERROR 255 
@@ -48,4 +60,5 @@
 // Client flags 
 #define CLIENT_LOGGED_IN (1 << 0)
 #define CLIENT_LOOKING_FOR_GAME (1 << 1)
+
 #endif
