@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/poll.h>
+#include <termios.h>
 #include <unistd.h>
 
 error_code client_signup(client_state_t* state);
@@ -536,39 +538,83 @@ error_code client_look_for_game(client_state_t* state) {
 
     fprintf(stdout, "Looking for game (press q to cancel)\n");
 
-    pthread_t loading_thread;
-    int timeout = 300000;
-    pthread_create(&loading_thread, NULL, print_loading, &timeout);
+    struct pollfd poll_fds[2] = {
+        { .fd = STDIN_FILENO, .events = POLLIN }, 
+        { .fd = state->sock_fd, .events = POLLIN }, 
+    };
 
-    char cmd;
+    int timeout = 300;
+    int dots_count = 0; 
+    char cmd = 0;
+
+    struct termios new, old;
+    tcgetattr(STDIN_FILENO, &old); 
+    new = old;
+
+    // Set canonical mode so we get stdin event 
+    // as soon as the user types something
+    new.c_lflag &= ~(ICANON | ECHO);
+    tcsetattr(STDIN_FILENO, TCSANOW, &new);
+     
     while (1) {
-        read_char_raw(&cmd);
-
-        if (err == ERR_IIN) {
-            error_print(err);
-            continue;
-        }
-
-        if (err == ERR_UNKNOWN) {
-            error_print(err);
-            break;
-        }
-
-        if (cmd == 'q') {
+        int ret = poll(poll_fds, 2, timeout);
+        if (ret == -1) {
+            fprintf(stderr, RED "ERROR: poll failed %s\n" RESET, strerror(errno));
             break;
         } 
 
-        fprintf(stderr, RED "ERROR: %c is invalid command\n" RESET, cmd);
+        // timeout 
+        if (ret == 0) {
+            // print 10 dots and then clear them
+            if (dots_count == 10) {
+                printf("\r          \r"); 
+                fflush(stdout);
+                dots_count = 0;
+                continue;
+            }
+            putchar('.');
+            fflush(stdout);
+            dots_count++;
+
+            continue;
+        }
+    
+
+        // check if we have something in stdin
+        if (poll_fds[0].revents & POLLIN) {
+            cmd = getchar();
+
+            if (err == ERR_IIN) {
+                error_print(err);
+                continue;
+            }
+
+            if (err == ERR_UNKNOWN) {
+                error_print(err);
+                break;
+            }
+
+            if (cmd == 'q') {
+                break;
+            } 
+
+            fprintf(stderr, RED "ERROR: %c is invalid command\n" RESET, cmd);
+            dots_count = 0;
+        }
+
+        if (poll_fds[1].revents & POLLIN) {
+            fprintf(stdout, "GOT MESSAGE FROM SERVER\n");
+            break;
+        }
     }
 
-    // Print new line so that menu appears other dots
-    fprintf(stdout, "\n");
-
-    pthread_cancel(loading_thread);
-    pthread_join(loading_thread, NULL);
+    // return to normal mode
+    tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
     // Did user press q to cancel, if he did then send the cancel look for game request
     if (cmd == 'q') {
+        // Print new line so that menu appears other dots
+        fprintf(stdout, "\n");
         return client_cancel_look_for_game(state);
     }
 
@@ -630,24 +676,6 @@ error_code client_challenge_player(client_state_t* state) {
     fprintf(stdout, GREEN "Challenge accepted, entering lobby %d\n" RESET, res.success.lobby_id);
 
     return ERR_NONE;
-}
-
-void* print_loading(void* param) {
-    int timeout = *(int*)param;
-    
-    while(1) {
-        for (int j = 0; j < 10; j++) {
-            putchar('.');
-            fflush(stdout);
-            usleep(timeout); // 0.5-second delay
-        }
-
-        // Move back to start of the line to clear
-        printf("\r          \r"); // Carriage return + clearing spaces
-        fflush(stdout);
-    }
-
-    return NULL;
 }
 
 error_code client_menu_create(menu_t* menu)
