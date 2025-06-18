@@ -27,6 +27,8 @@ error_code client_list_users(client_state_t* state);
 error_code client_look_for_game(client_state_t* state);
 error_code client_cancel_look_for_game(client_state_t* state);
 error_code client_challenge_player(client_state_t* state);
+error_code client_respond_to_challenge(client_state_t* state, uint8_t* answer);
+error_code client_read_lobby_data(client_state_t* state);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
@@ -546,6 +548,7 @@ error_code client_look_for_game(client_state_t* state) {
     int timeout = 300;
     int dots_count = 0; 
     char cmd = 0;
+    char got_message = 0;
 
     struct termios new, old;
     tcgetattr(STDIN_FILENO, &old); 
@@ -603,7 +606,7 @@ error_code client_look_for_game(client_state_t* state) {
         }
 
         if (poll_fds[1].revents & POLLIN) {
-            fprintf(stdout, "GOT MESSAGE FROM SERVER\n");
+            got_message = 1;
             break;
         }
     }
@@ -611,16 +614,120 @@ error_code client_look_for_game(client_state_t* state) {
     // return to normal mode
     tcsetattr(STDIN_FILENO, TCSANOW, &old);
 
+    // Print new line so that menu appears other dots
+    fprintf(stdout, "\n");
+    //
     // Did user press q to cancel, if he did then send the cancel look for game request
     if (cmd == 'q') {
-        // Print new line so that menu appears other dots
-        fprintf(stdout, "\n");
         return client_cancel_look_for_game(state);
+    }
+
+    if (!got_message) {
+        return ERR_NONE;
+    }
+
+    uint8_t accepted = 0;
+    err = client_respond_to_challenge(state, &accepted);
+    if (err != ERR_NONE) {
+        return err;
+    }
+
+    if (!accepted)  {
+        fprintf(stdout, "I didn't accept the game so canceling the looking for game\n");
+        return client_cancel_look_for_game(state);
+    }
+   
+    fprintf(stdout, "I accepted the game, waiting to get lobby id from server\n");
+
+    err = client_read_lobby_data(state);
+    if (err != ERR_NONE) {
+        return err;
+    }
+
+    fprintf(stdout, GREEN "Joined lobby %d\n" RESET, state->lobby_id);
+
+    return ERR_NONE;
+}
+
+error_code client_respond_to_challenge(client_state_t* state, uint8_t* accepted) {
+    ServerEventAcceptChallengeRequestMessage req; 
+    error_code err = read_message(state->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read accept challenge request message\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    char line[2];
+    char answer = '\0';
+
+    while (1) {
+        fprintf(stdout, "User \"%s\" challenged you to a game, do you accept (y/n): ", req.challenger_username);
+        err = read_line(line, 2);
+        if (err == ERR_NONE) {
+            answer = line[0];
+            if (answer == 'N') {
+                answer = 'n';
+            }
+
+            if (answer == 'Y') {
+                answer = 'y';
+            }
+
+            if (answer != 'n' && answer != 'y') {
+                fprintf(stderr, RED "ERROR: Invalid input expected y/n but got %c\n" RESET, answer);
+                continue;
+            }
+
+            break;
+        }
+        if (err == ERR_UNKNOWN) {
+            fprintf(stderr,  RED "%s Responding with no\n" RESET, error_to_string(err));
+            answer = 'n';
+            break;
+        }
+        if (err == ERR_IIN) {
+            error_print(err);
+            continue;
+        }
+    }
+   
+    ClientEventAcceptChallengeRequestMessage res;
+    res.type = MSG_ACCEPT_CHALLENGE_ANSWER;
+    if (answer == 'y') {
+        *accepted = 1;
+        res.accept  = 1;
+    } else {
+        *accepted = 0;
+        res.accept  = 0;
+    }
+
+    fprintf(stdout,"Sending back my answer %d\n", res.accept);
+    err = send_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to send accept challenge response message\n" RESET, error_to_string(err));
+        return err;
     }
 
     return ERR_NONE;
 }
 
+error_code client_read_lobby_data(client_state_t* state) {
+    ChallengePlayerResponseMessage res;
+    error_code err = read_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read challenge player response message\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.success.status_code != STATUS_OK) {
+        fprintf(stderr, RED "ERROR: didn't get lobby id %d - %s\n" RESET, res.error.status_code, res.error.message);
+        return ERR_UNKNOWN;
+    }
+
+
+    state->lobby_id = res.success.lobby_id;
+    return ERR_NONE;
+}
 
 error_code client_challenge_player(client_state_t* state) {
 	fprintf(stdout, "Enter player's username you whish to challenge (max %d): ", USERNAME_MAX_LEN);

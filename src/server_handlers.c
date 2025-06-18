@@ -10,6 +10,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+static error_code handle_accept_challenge_player(server_client_t* client, server_client_t* other, uint8_t* answer);
+
 #define BYTE_MAX 256
 void generate_random_hex_string(char* buffer, uint32_t len);
 
@@ -20,7 +22,7 @@ error_code handle_unknown_request(server_client_t* client) {
 
     error_code  err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.status_code, res.message);
+        fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.status_code, res.message);
     }
     return err;
 }
@@ -35,7 +37,7 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -66,7 +68,7 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -87,7 +89,7 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
     }
     return err;
 }
@@ -102,7 +104,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -136,7 +138,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -149,7 +151,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -165,7 +167,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
     }
     return err;
 }
@@ -180,7 +182,7 @@ error_code handle_logout_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -192,7 +194,7 @@ error_code handle_logout_request(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d - %s" RESET, error_to_string(err), res.error.status_code, res.error.message);
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
         }
         return err;
     }
@@ -204,7 +206,7 @@ error_code handle_logout_request(server_client_t* client, const char* buffer) {
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
     }
 
     return err;
@@ -231,7 +233,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -243,7 +245,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -272,7 +274,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count" RESET, client->sock_fd);
+        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
 
         pthread_mutex_unlock(&client->state->clients_lock);
         return err;
@@ -298,7 +300,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &looking_for_game, sizeof(looking_for_game));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s looking for game byte" RESET, client->sock_fd, client->user.username);
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s looking for game byte\n" RESET, client->sock_fd, client->user.username);
 
             pthread_mutex_unlock(&client->state->users_lock);
             return err;
@@ -306,7 +308,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, other->user.username, USERNAME_MAX_LEN);
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s username" RESET, client->sock_fd, client->user.username);
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s username\n" RESET, client->sock_fd, client->user.username);
 
             pthread_mutex_unlock(&client->state->clients_lock);
             return err;
@@ -327,7 +329,7 @@ error_code handle_look_for_game(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -339,7 +341,7 @@ error_code handle_look_for_game(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -350,7 +352,7 @@ error_code handle_look_for_game(server_client_t* client, const char* buffer) {
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count" RESET, client->sock_fd);
+        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
         return err;
     }
 
@@ -367,7 +369,7 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -379,7 +381,7 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -390,7 +392,7 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count" RESET, client->sock_fd);
+        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
         return err;
     }
 
@@ -407,7 +409,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -419,7 +421,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
 
         return err;
@@ -457,7 +459,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" doesn't exist", req.target_username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -471,7 +473,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" is not connected", other->user.username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
@@ -481,20 +483,91 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" is not looking a for game", other->user.username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         }
         return err;
     }
 
+
+    fprintf(stdout, "Asking other player does he want to play\n");
+
+    // Ask other player does he want to play
+    uint8_t answer = 0;
+    err = handle_accept_challenge_player(client, other, &answer);
+    if (err != ERR_NONE) {
+        res.error.status_code = STATUS_PLAYER_ERROR;
+        sprintf(res.error.message, "Player \"%s\" failed to respond successfully", other->user.username);
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+        }
+        return err;
+    }
+
+    // if other play declined the request
+    if (!answer) {
+        fprintf(stdout, "Other player said no\n");
+
+        res.error.status_code = STATUS_PLAYER_DECLINED;
+        sprintf(res.error.message, "Player \"%s\" declined the challenge", other->user.username);
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+        }
+        return err;
+    }
+
+    fprintf(stdout, "Other player said yes\n");
+    // TODO:
+    // Create the game set client statuses to be ingame and create game data where those 2 are going to play
     res.success.status_code = STATUS_OK;
     res.success.lobby_id = 10;
 
+    fprintf(stdout, "Sending lobby id to challenger\n");
+    // Send lobby id to challenger client
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d" RESET, error_to_string(err), res.success.status_code);
+        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+        return err;
+    }
+
+    fprintf(stdout, "Sending lobby id to challenged\n");
+    // Send lobby id to challenged client
+    err = send_message(other->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
         return err;
     }
 
     return ERR_NONE;
 }
 
+static error_code handle_accept_challenge_player(server_client_t* client, server_client_t* other, uint8_t* answer) {
+    *answer = 0;
+
+    ServerEventAcceptChallengeRequestMessage req;
+    req.type = MSG_ACCEPT_CHALLENGE_QUESTION;
+    strncpy(req.challenger_username, client->user.username, USERNAME_MAX_LEN);
+
+    error_code err = send_message(other->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s failed to send accept challenge request\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    ClientEventAcceptChallengeRequestMessage res;
+    err = read_message(other->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s failed to read accept challenge response\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.type != MSG_ACCEPT_CHALLENGE_ANSWER) {
+        fprintf(stderr, RED "ERROR: accept challenge response invalid type %d\n" RESET, res.type);
+        return ERR_NONE;
+    }
+
+    *answer = res.accept;
+
+    return ERR_NONE; 
+}

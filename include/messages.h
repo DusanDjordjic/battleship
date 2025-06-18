@@ -114,10 +114,26 @@ typedef struct {
     char api_key[API_KEY_LEN];
 } CancelLookForGameRequestMessage;
 
+// Set by the client to challenge other clients
+// target_username is the username 
+// of the client you wish to play with
 typedef struct {
     uint8_t type;
     char api_key[API_KEY_LEN];
     char target_username[USERNAME_MAX_LEN];
 } ChallengePlayerRequestMessage;
+
+// Sent by the server to the client that 
+// is being challenged to a game
+typedef struct {
+    uint8_t type;
+    char challenger_username[USERNAME_MAX_LEN];
+} ServerEventAcceptChallengeRequestMessage;
+
+// sent by the client to say if he accepts the game or not
+typedef struct {
+    uint8_t type;
+    uint8_t accept;
+} ClientEventAcceptChallengeRequestMessage;
 
 #endif

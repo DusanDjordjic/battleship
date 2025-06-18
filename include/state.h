@@ -20,6 +20,8 @@ typedef struct {
     uint8_t logged_in;
     // Api token used in requests
 	char api_key[API_KEY_LEN];
+    // If lobby_id is not 0 that meants that player is in game
+    uint32_t lobby_id;
 } client_state_t;
 
 

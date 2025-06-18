@@ -26,6 +26,8 @@
 #define MSG_LOOK_FOR_GAME 5
 #define MSG_CANCEL_LOOK_FOR_GAME 6
 #define MSG_CHALLENGE_PLAYER 7
+#define MSG_ACCEPT_CHALLENGE_QUESTION 8
+#define MSG_ACCEPT_CHALLENGE_ANSWER 9
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -37,10 +39,14 @@
 #define STATUS_UNAUTHORIZED 4
 // Client sent a bad request (login while already logged in, etc...)
 #define STATUS_BAD_REQUEST 5
-// Client sent a bad request (login while already logged in, etc...)
+// Other player is not connected
 #define STATUS_PLAYER_IS_NOT_CONNECTED 6
-// Client sent a bad request (login while already logged in, etc...)
+// Other player is not looking for a game
 #define STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME 7
+// Other player failed to respond successfully
+#define STATUS_PLAYER_ERROR 8
+// Other player declined game
+#define STATUS_PLAYER_DECLINED 9
 
 // Unknown error
 #define STATUS_UNKNOWN_ERROR 255 

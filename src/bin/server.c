@@ -152,11 +152,12 @@ void* handle_client_connetion(void* params)
         memset(buffer, 0, IN_BUFFER_SIZE);
         error_code err = read_message(client->sock_fd, buffer, IN_BUFFER_SIZE);
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to read client message, %d - %s\n" RESET, client->sock_fd, err, error_to_string(err));
             if (err == ERR_PEER_CLOSED) {
+                fprintf(stderr, GREEN "CLIENT %d: Disconnected\n" RESET, client->sock_fd);
                 break;
             }
 
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to read client message, %d - %s\n" RESET, client->sock_fd, err, error_to_string(err));
             if (err == ERR_IFD) {
                 fprintf(stderr, RED "ERROR: CLIENT %d: Something is wrong with socket, closing connection\n" RESET, client->sock_fd);
                 break;
