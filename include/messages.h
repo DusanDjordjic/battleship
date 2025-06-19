@@ -73,11 +73,11 @@ typedef union {
 
 typedef struct {
     uint8_t status_code;
-    uint32_t lobby_id;
-} LobbyIDResponse;
+    uint32_t game_id;
+} GameIDResponse;
 
 typedef union {
-    LobbyIDResponse success;
+    GameIDResponse success;
     ErrorResponseMessage error; 
 } ChallengePlayerResponseMessage;
 
@@ -128,12 +128,13 @@ typedef struct {
 typedef struct {
     uint8_t type;
     char challenger_username[USERNAME_MAX_LEN];
-} ServerEventAcceptChallengeRequestMessage;
+} ChallengeQuestionRequestMessage;
 
 // sent by the client to say if he accepts the game or not
 typedef struct {
     uint8_t type;
     uint8_t accept;
-} ClientEventAcceptChallengeRequestMessage;
+    char api_key[API_KEY_LEN];
+} ChallengeAnswerRequestMessage;
 
 #endif

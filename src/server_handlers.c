@@ -1,6 +1,7 @@
-
 #include "include/errors.h"
+#include "include/game.h"
 #include "include/globals.h"
+#include "include/server_utils.h"
 #include "include/messages.h"
 #include "include/state.h"
 #include "include/users.h"
@@ -10,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-static error_code handle_accept_challenge_player(server_client_t* client, server_client_t* other, uint8_t* answer);
+static error_code handle_ask_other_player(server_client_t* client, server_client_t* other);
 
 #define BYTE_MAX 256
 void generate_random_hex_string(char* buffer, uint32_t len);
@@ -31,7 +32,7 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
     SignupResponseMessage res = { 0 };
 
-    if (client->flags & CLIENT_LOGGED_IN) {
+    if (client_logged_in(client)) {
         res.error.status_code = STATUS_BAD_REQUEST;
         sprintf(res.error.message, "Cannot signup when already logged in");
 
@@ -44,23 +45,8 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
 
     SignupRequestMessage req = *(SignupRequestMessage*)(buffer);
    
-    pthread_mutex_lock(&client->state->users_lock);
-
-    char found = 0;
-    for (unsigned int i = 0; i < client->state->users.logical_length ; i++ ) {
-         server_user_t* user = vector_at(&client->state->users, i);
-         if (strncmp(req.username, user->username, USERNAME_MAX_LEN) == 0) {
-             found = 1;
-         }
-
-         if (found) {
-             break;
-         }
-    }
-
-    pthread_mutex_unlock(&client->state->users_lock);
-
-    if (found) {
+    server_user_t* user = server_find_user_by_username(client->server_state, req.username);
+    if (user != NULL) {
         res.error.status_code = STATUS_CONFLICT;
         sprintf(res.error.message, "Username %s already exists", req.username);
         fprintf(stderr, RED "ERROR: CLIENT %d: User signup failed, %d - %s\n" RESET,
@@ -73,17 +59,18 @@ error_code handle_signup_request(server_client_t* client, const char* buffer) {
         return err;
     }
     
-    strncpy(client->user.username, req.username, USERNAME_MAX_LEN);
-    strncpy(client->user.password, req.password, PASSWORD_MAX_LEN);
-    generate_random_hex_string(client->api_key, API_KEY_LEN);
-    client->flags |= CLIENT_LOGGED_IN;
+    server_user_t new_user;
+    strncpy(new_user.username, req.username, USERNAME_MAX_LEN);
+    strncpy(new_user.password, req.password, PASSWORD_MAX_LEN);
 
-    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" signed up\n" RESET, client->sock_fd,client->user.username);
+    client->user = server_add_user(client->server_state, new_user);
+
+    generate_random_hex_string(client->api_key, API_KEY_LEN);
+
+    client_set_logged_in(client);
+
+    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" signed up\n" RESET, client->sock_fd,client->user->username);
    
-    pthread_mutex_lock(&client->state->users_lock);
-    vector_push(&(client->state->users), &client->user);
-    pthread_mutex_unlock(&client->state->users_lock);
-    
     res.success.status_code = STATUS_OK;
     strncpy(res.success.api_key, client->api_key, API_KEY_LEN);
 
@@ -98,7 +85,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
     LoginResponseMessage res = { 0 };
 
-    if (client->flags & CLIENT_LOGGED_IN) {
+    if (client_logged_in(client)) {
         res.error.status_code = STATUS_BAD_REQUEST;
         sprintf(res.error.message, "Cannot login when already logged in");
 
@@ -110,27 +97,29 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
     }
 
     LoginRequestMessage req = *(LoginRequestMessage*)(buffer);
-   
-    pthread_mutex_lock(&client->state->users_lock);
-
-    char found = 0;
-
-    for (unsigned int i = 0; i < client->state->users.logical_length ; i++ ) {
-         server_user_t* existing_user = vector_at(&client->state->users, i);
-         if (strncmp(req.username, existing_user->username, USERNAME_MAX_LEN) == 0) {
-             // Copy the user to the client
-             client->user = *existing_user;
-             found = 1;
-         }
-
-         if (found) {
-             break;
-         }
+  
+    // Check if there is a client that is logged in with current user
+    server_client_t* other = server_find_client_by_username(client->server_state, req.username);
+    if (other == client) {
+        // We already checked if we are logged in and because we are not logged in
+        // our user is currently NULL so this is unreachable
+        UNREACHABLE;
     }
 
-    pthread_mutex_unlock(&client->state->users_lock);
+    if (other != NULL) {
+        res.error.status_code = STATUS_BAD_REQUEST;
+        sprintf(res.error.message, "Cannot login because somebody else is already logged in");
 
-    if (!found) {
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s failed to send message %d - %s\n" RESET, error_to_string(err), res.error.status_code, res.error.message);
+        }
+        return err;
+    }
+
+    
+    server_user_t* user = server_find_user_by_username(client->server_state, req.username);
+    if (user == NULL) {
         res.error.status_code = STATUS_NOT_FOUND;
         sprintf(res.error.message, "Failed to find user with username \"%s\"", req.username);
         fprintf(stderr, RED "ERROR: CLIENT %d: User login failed, %d - %s\n" RESET,
@@ -143,7 +132,7 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
         return err;
     }
     
-    if (strncmp(req.password, client->user.password, PASSWORD_MAX_LEN) != 0) {
+    if (strncmp(req.password, user->password, PASSWORD_MAX_LEN) != 0) {
         res.error.status_code = STATUS_UNAUTHORIZED;
         sprintf(res.error.message, "Invalid password");
         fprintf(stderr, RED "ERROR: CLIENT %d: User login failed, %d - %s\n" RESET,
@@ -156,11 +145,11 @@ error_code handle_login_request(server_client_t* client, const char* buffer) {
         return err;
     }
 
+    client->user = user;
     generate_random_hex_string(client->api_key, API_KEY_LEN);
-
-    client->flags |= CLIENT_LOGGED_IN;
+    client_set_logged_in(client);
      
-    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" logged in\n" RESET, client->sock_fd,client->user.username);
+    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" logged in\n" RESET, client->sock_fd, user->username);
     
     res.success.status_code = STATUS_OK;
     strncpy(res.success.api_key, client->api_key, API_KEY_LEN);
@@ -176,7 +165,7 @@ error_code handle_logout_request(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
     LogoutResponseMessage res = { 0 };
 
-    if (!(client->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(client)) {
         res.error.status_code = STATUS_BAD_REQUEST;
         sprintf(res.error.message, "Cannot logout while not logged in");
 
@@ -199,9 +188,12 @@ error_code handle_logout_request(server_client_t* client, const char* buffer) {
         return err;
     }
 
-    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" logged out\n" RESET, client->sock_fd,client->user.username);
+    fprintf(stderr, GREEN "CLIENT %d: User \"%s\" logged out\n" RESET, client->sock_fd,client->user->username);
 
-    client->flags &= ~CLIENT_LOGGED_IN;
+    client->user = NULL;
+    client_clear_logged_in(client);
+    memset(client->api_key, 0, API_KEY_LEN);
+
     res.success.status_code = STATUS_OK;
 
     err = send_message(client->sock_fd, &res, sizeof(res));
@@ -227,13 +219,13 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
     ListUsersResponseMessage res = { 0 };
 
-    if (!(client->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(client)) {
         res.error.status_code = STATUS_UNAUTHORIZED;
         sprintf(res.error.message, "Invalid api token");
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
@@ -245,7 +237,7 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
@@ -255,13 +247,12 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
     // that sent the request
     res.success.count = 0;
 
-
-    pthread_mutex_lock(&client->state->clients_lock);
+    pthread_rwlock_rdlock(&client->server_state->clients_rwlock);
    
     // Count clients that are logged in and skip this client
-    for (uint32_t i = 0; i < client->state->clients.logical_length; i++) {
-        server_client_t* other= vector_at(&client->state->clients, i);
-        if (!(other->flags & CLIENT_LOGGED_IN)) {
+    for (uint32_t i = 0; i < client->server_state->clients.logical_length; i++) {
+        server_client_t* other= vector_at(&client->server_state->clients, i);
+        if (!client_logged_in(other)) {
             continue; 
         }
 
@@ -272,19 +263,21 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
         res.success.count++;
     } 
 
+    pthread_rwlock_unlock(&client->server_state->clients_rwlock);
+
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
-
-        pthread_mutex_unlock(&client->state->clients_lock);
+        fprintf(stderr, RED "%s CLIENT %d: Failed to send list users count\n" RESET, error_to_string(err), client->sock_fd);
         return err;
     }
 
-    for (uint32_t i = 0; i < client->state->clients.logical_length; i++) {
-        server_client_t* other = vector_at(&client->state->clients, i);
+    pthread_rwlock_rdlock(&client->server_state->clients_rwlock);
 
-        // skip clients that are not logged in
-        if (!(other->flags & CLIENT_LOGGED_IN)) {
+    for (uint32_t i = 0; i < client->server_state->clients.logical_length; i++) {
+        server_client_t* other = vector_at(&client->server_state->clients, i);
+
+        // Skip clients that are not logged in
+        if (!client_logged_in(other)) {
             continue; 
         }
 
@@ -294,28 +287,25 @@ error_code handle_list_users(server_client_t* client, const char* buffer) {
         }
 
         uint8_t looking_for_game = 0;
-        if (other->flags & CLIENT_LOOKING_FOR_GAME) {
+        if (client_looking_for_game(other)) {
             looking_for_game = 1;
         }
 
         err = send_message(client->sock_fd, &looking_for_game, sizeof(looking_for_game));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s looking for game byte\n" RESET, client->sock_fd, client->user.username);
-
-            pthread_mutex_unlock(&client->state->users_lock);
-            return err;
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send looking for game byte\n" RESET, error_to_string(err), client->sock_fd);
+            break;
         }
 
-        err = send_message(client->sock_fd, other->user.username, USERNAME_MAX_LEN);
+        err = send_message(client->sock_fd, other->user->username, USERNAME_MAX_LEN);
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send %s username\n" RESET, client->sock_fd, client->user.username);
-
-            pthread_mutex_unlock(&client->state->clients_lock);
-            return err;
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send username\n" RESET, error_to_string(err), client->sock_fd);
+            break;
         }
     }
 
-    pthread_mutex_unlock(&client->state->clients_lock);
+    pthread_rwlock_unlock(&client->server_state->clients_rwlock);
+
     return ERR_NONE;
 }
 
@@ -323,13 +313,13 @@ error_code handle_look_for_game(server_client_t* client, const char* buffer) {
     error_code err = ERR_NONE;
     LookForGameResponseMessage res = { 0 };
 
-    if (!(client->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(client)) {
         res.error.status_code = STATUS_UNAUTHORIZED;
         sprintf(res.error.message, "Invalid api token");
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
@@ -341,18 +331,18 @@ error_code handle_look_for_game(server_client_t* client, const char* buffer) {
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
 
-    client->flags |= CLIENT_LOOKING_FOR_GAME;
+    client_set_looking_for_game(client);
 
     res.success.status_code = STATUS_OK;
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
+        fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         return err;
     }
 
@@ -363,13 +353,13 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
     error_code err = ERR_NONE;
     CancelLookForGameResponseMessage res = { 0 };
 
-    if (!(client->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(client)) {
         res.error.status_code = STATUS_UNAUTHORIZED;
-        sprintf(res.error.message, "Invalid api token");
+        sprintf(res.error.message, "Client is not logged in");
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
@@ -381,18 +371,18 @@ error_code handle_cancel_look_for_game(server_client_t* client, const char* buff
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         }
         return err;
     }
 
-    client->flags &= ~CLIENT_LOOKING_FOR_GAME;
+    client_clear_looking_for_game(client);
 
     res.success.status_code = STATUS_OK;
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
-        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
+        fprintf(stderr, RED "%s CLIENT %d: Failed to send message\n" RESET, error_to_string(err), client->sock_fd);
         return err;
     }
 
@@ -403,13 +393,13 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
     error_code err = ERR_NONE;
     ChallengePlayerResponseMessage res = { 0 };
 
-    if (!(client->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(client)) {
         res.error.status_code = STATUS_UNAUTHORIZED;
         sprintf(res.error.message, "Invalid api token");
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
         }
         return err;
     }
@@ -421,7 +411,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
 
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
         }
 
         return err;
@@ -429,32 +419,14 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
 
     
     // Go through all connected clients and check if one of them matches the requested one and its looking for game
-    server_client_t* other = NULL;
-    uint8_t found = 0;
-
-    pthread_mutex_lock(&client->state->clients_lock);
-
-    for (uint32_t i = 0; i < client->state->clients.logical_length; i++) {
-        other = vector_at(&client->state->clients, i);
-
-        if (client == other) {
-            continue;
-        }
-    
-        // TODO: remove when we switch to using linked lists for storage of clients
-        if (other->sock_fd == -1) {
-            continue;
-        }
-
-        if (strncmp(other->user.username, req.target_username, USERNAME_MAX_LEN) == 0) {
-            found = 1;
-            break;
-        }
+    server_client_t* other = server_find_client_by_username(client->server_state, req.target_username);
+    if (client == other) {
+        // We cannot at the same time look for game and challenge others so
+        // this is unreachable;
+        UNREACHABLE;
     }
-
-    pthread_mutex_unlock(&client->state->clients_lock);
-
-    if (found == 0) {
+    
+    if (other == NULL) {
         res.error.status_code = STATUS_NOT_FOUND;
         sprintf(res.error.message, "Player \"%s\" doesn't exist", req.target_username);
         err = send_message(client->sock_fd, &res, sizeof(res));
@@ -464,13 +436,9 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    if (other == NULL) {
-        UNREACHABLE;
-    }
-
-    if (!(other->flags & CLIENT_LOGGED_IN)) {
+    if (!client_logged_in(other)) {
         res.error.status_code = STATUS_PLAYER_IS_NOT_CONNECTED;
-        sprintf(res.error.message, "Player \"%s\" is not connected", other->user.username);
+        sprintf(res.error.message, "Player \"%s\" is not connected", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
             fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
@@ -478,9 +446,9 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    if (!(other->flags & CLIENT_LOOKING_FOR_GAME)){
+    if (!client_looking_for_game(other)){
         res.error.status_code = STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME;
-        sprintf(res.error.message, "Player \"%s\" is not looking a for game", other->user.username);
+        sprintf(res.error.message, "Player \"%s\" is not looking a for game", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
             fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
@@ -492,11 +460,10 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
     fprintf(stdout, "Asking other player does he want to play\n");
 
     // Ask other player does he want to play
-    uint8_t answer = 0;
-    err = handle_accept_challenge_player(client, other, &answer);
+    err = handle_ask_other_player(client, other);
     if (err != ERR_NONE) {
         res.error.status_code = STATUS_PLAYER_ERROR;
-        sprintf(res.error.message, "Player \"%s\" failed to respond successfully", other->user.username);
+        sprintf(res.error.message, "Player \"%s\" failed to respond successfully", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
             fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
@@ -504,50 +471,62 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         return err;
     }
 
+    // Send the message to the other player when he responds we will get that requets in 
+    // handle_client function and should process it there because its only valid if we 
+    // read messages from one place to avoid race conditions.
+    //
+    // To achieve this, create new game lobby with id and add both clients there
+
+    Game* game = server_add_game(client->server_state, game_new(client, other));
+
+    client_join_game(client, game);
+    client_join_game(other, game);
+
+    // Client that started the challenge automatically accepted the game
+    game_accept(game, client);
+    
     // if other play declined the request
-    if (!answer) {
-        fprintf(stdout, "Other player said no\n");
+    //if (!answer) {
+    //    fprintf(stdout, "Other player said no\n");
 
-        res.error.status_code = STATUS_PLAYER_DECLINED;
-        sprintf(res.error.message, "Player \"%s\" declined the challenge", other->user.username);
-        err = send_message(client->sock_fd, &res, sizeof(res));
-        if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-        }
-        return err;
-    }
+    //    res.error.status_code = STATUS_PLAYER_DECLINED;
+    //    sprintf(res.error.message, "Player \"%s\" declined the challenge", other->user.username);
+    //    err = send_message(client->sock_fd, &res, sizeof(res));
+    //    if (err != ERR_NONE) {
+    //        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+    //    }
+    //    return err;
+    //}
 
-    fprintf(stdout, "Other player said yes\n");
-    // TODO:
-    // Create the game set client statuses to be ingame and create game data where those 2 are going to play
-    res.success.status_code = STATUS_OK;
-    res.success.lobby_id = 10;
+    //fprintf(stdout, "Other player said yes\n");
+    //// TODO:
+    //// Create the game set client statuses to be ingame and create game data where those 2 are going to play
+    //res.success.status_code = STATUS_OK;
+    //res.success.lobby_id = 10;
 
-    fprintf(stdout, "Sending lobby id to challenger\n");
-    // Send lobby id to challenger client
-    err = send_message(client->sock_fd, &res, sizeof(res));
-    if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-        return err;
-    }
+    //fprintf(stdout, "Sending lobby id to challenger\n");
+    //// Send lobby id to challenger client
+    //err = send_message(client->sock_fd, &res, sizeof(res));
+    //if (err != ERR_NONE) {
+    //    fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+    //    return err;
+    //}
 
-    fprintf(stdout, "Sending lobby id to challenged\n");
-    // Send lobby id to challenged client
-    err = send_message(other->sock_fd, &res, sizeof(res));
-    if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-        return err;
-    }
+    //fprintf(stdout, "Sending lobby id to challenged\n");
+    //// Send lobby id to challenged client
+    //err = send_message(other->sock_fd, &res, sizeof(res));
+    //if (err != ERR_NONE) {
+    //    fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+    //    return err;
+    //}
 
     return ERR_NONE;
 }
 
-static error_code handle_accept_challenge_player(server_client_t* client, server_client_t* other, uint8_t* answer) {
-    *answer = 0;
-
-    ServerEventAcceptChallengeRequestMessage req;
-    req.type = MSG_ACCEPT_CHALLENGE_QUESTION;
-    strncpy(req.challenger_username, client->user.username, USERNAME_MAX_LEN);
+static error_code handle_ask_other_player(server_client_t* client, server_client_t* other) {
+    ChallengeQuestionRequestMessage req;
+    req.type = MSG_CHALLENGE_QUESTION;
+    strncpy(req.challenger_username, client->user->username, USERNAME_MAX_LEN);
 
     error_code err = send_message(other->sock_fd, &req, sizeof(req));
     if (err != ERR_NONE) {
@@ -555,19 +534,74 @@ static error_code handle_accept_challenge_player(server_client_t* client, server
         return err;
     }
 
-    ClientEventAcceptChallengeRequestMessage res;
-    err = read_message(other->sock_fd, &res, sizeof(res));
-    if (err != ERR_NONE) {
-        fprintf(stderr, RED "%s failed to read accept challenge response\n" RESET, error_to_string(err));
+    return ERR_NONE; 
+}
+
+error_code handle_challenge_answer(server_client_t* client, const char* buffer) {
+    error_code err = ERR_NONE;
+    ChallengePlayerResponseMessage res = {0};
+
+    if (!client_logged_in(client)) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
+        }
         return err;
     }
 
-    if (res.type != MSG_ACCEPT_CHALLENGE_ANSWER) {
-        fprintf(stderr, RED "ERROR: accept challenge response invalid type %d\n" RESET, res.type);
+    ChallengeAnswerRequestMessage req = *(ChallengeAnswerRequestMessage*)(buffer);
+    if (strncmp(req.api_key, client->api_key, API_KEY_LEN) != 0) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send list users count\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    Game* game = client->game;
+    server_client_t* other = game_other_player(game, client);
+
+    if (req.accept) {
+        res.success.status_code = STATUS_OK;
+        res.success.game_id = client->game->id;
+
+        game_accept(game, client);
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s CLIENT %d: failed to send message\n" RESET, error_to_string(err), client->sock_fd);
+            return err;
+        }
+
+        err = send_message(other->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s CLIENT %d: failed to send message\n" RESET, error_to_string(err), other->sock_fd);
+            return err;
+        }
+
         return ERR_NONE;
     }
 
-    *answer = res.accept;
+    res.error.status_code = STATUS_PLAYER_DECLINED;
+    sprintf(res.error.message, "Player \"%s\" declined the challenge", client->user->username);
 
-    return ERR_NONE; 
+    err = send_message(other->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s CLIENT %d: failed to send message\n" RESET, error_to_string(err), other->sock_fd);
+        return err;
+    }
+
+    client->game = NULL;
+    other->game = NULL;
+
+    server_remove_game(client->server_state, game);
+
+    return ERR_NONE;
 }

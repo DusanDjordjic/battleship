@@ -12,5 +12,6 @@ error_code handle_list_users(server_client_t* client, const char* buffer);
 error_code handle_look_for_game(server_client_t* client, const char* buffer);
 error_code handle_cancel_look_for_game(server_client_t* client, const char* buffer);
 error_code handle_challenge_player(server_client_t* client, const char* buffer);
+error_code handle_challenge_answer(server_client_t* client, const char* buffer);
 
 #endif

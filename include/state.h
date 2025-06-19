@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <include/globals.h>
 
+typedef struct Game Game;
+
 // Client types 
 
 typedef struct {
@@ -21,7 +23,7 @@ typedef struct {
     // Api token used in requests
 	char api_key[API_KEY_LEN];
     // If lobby_id is not 0 that meants that player is in game
-    uint32_t lobby_id;
+    uint32_t game_id;
 } client_state_t;
 
 
@@ -34,28 +36,47 @@ typedef struct {
     // Array of clients 
     Vector clients;
     // Lock used to limit access to array
-    pthread_mutex_t clients_lock;
-    
+    pthread_rwlock_t clients_rwlock;
+  
+    Vector games;
+    pthread_rwlock_t games_rwlock;
+    uint32_t next_game_id;
+
     // List of all registered users. 
     // Loaded from a file at the start of program
     Vector users;
-    pthread_mutex_t users_lock;
+    // Server initalizes users.
+    // Clients can trigger signup which will modify the users 
+    // Clients can trigger login which needs to read the users
+    pthread_rwlock_t users_rwlock;
+
 } server_state_t;
+
 
 typedef struct {
     // Thread that handles client connection
     pthread_t handler_thread;
 
     // Back pointer to whole server state
-	server_state_t* state;
+	server_state_t* server_state;
 
     // User information about client
-	server_user_t user;
+	server_user_t* user;
 
 	int sock_fd;
 	struct sockaddr_in addr;
     char api_key[API_KEY_LEN];
     uint32_t flags;
+    Game* game;
 } server_client_t;
+
+struct Game{
+    uint32_t id;
+    server_client_t* first;
+    uint8_t first_accepted;
+    server_client_t* second;
+    uint8_t second_accepted;
+    uint8_t game_state;
+};
 
 #endif

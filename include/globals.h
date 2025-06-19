@@ -26,8 +26,8 @@
 #define MSG_LOOK_FOR_GAME 5
 #define MSG_CANCEL_LOOK_FOR_GAME 6
 #define MSG_CHALLENGE_PLAYER 7
-#define MSG_ACCEPT_CHALLENGE_QUESTION 8
-#define MSG_ACCEPT_CHALLENGE_ANSWER 9
+#define MSG_CHALLENGE_QUESTION 8 // This is sent to the client
+#define MSG_CHALLENGE_ANSWER 9
 
 // Request was processed successfully
 #define STATUS_OK 1

@@ -28,7 +28,7 @@ error_code client_look_for_game(client_state_t* state);
 error_code client_cancel_look_for_game(client_state_t* state);
 error_code client_challenge_player(client_state_t* state);
 error_code client_respond_to_challenge(client_state_t* state, uint8_t* answer);
-error_code client_read_lobby_data(client_state_t* state);
+error_code client_read_game_data(client_state_t* state);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
@@ -639,18 +639,18 @@ error_code client_look_for_game(client_state_t* state) {
    
     fprintf(stdout, "I accepted the game, waiting to get lobby id from server\n");
 
-    err = client_read_lobby_data(state);
+    err = client_read_game_data(state);
     if (err != ERR_NONE) {
         return err;
     }
 
-    fprintf(stdout, GREEN "Joined lobby %d\n" RESET, state->lobby_id);
+    fprintf(stdout, GREEN "Joined game %d\n" RESET, state->game_id);
 
     return ERR_NONE;
 }
 
 error_code client_respond_to_challenge(client_state_t* state, uint8_t* accepted) {
-    ServerEventAcceptChallengeRequestMessage req; 
+    ChallengeQuestionRequestMessage req; 
     error_code err = read_message(state->sock_fd, &req, sizeof(req));
     if (err != ERR_NONE) {
         fprintf(stderr, RED "%s Failed to read accept challenge request message\n" RESET, error_to_string(err));
@@ -691,8 +691,10 @@ error_code client_respond_to_challenge(client_state_t* state, uint8_t* accepted)
         }
     }
    
-    ClientEventAcceptChallengeRequestMessage res;
-    res.type = MSG_ACCEPT_CHALLENGE_ANSWER;
+    ChallengeAnswerRequestMessage res;
+    res.type = MSG_CHALLENGE_ANSWER;
+    strncpy(res.api_key, state->api_key, API_KEY_LEN);
+
     if (answer == 'y') {
         *accepted = 1;
         res.accept  = 1;
@@ -711,7 +713,7 @@ error_code client_respond_to_challenge(client_state_t* state, uint8_t* accepted)
     return ERR_NONE;
 }
 
-error_code client_read_lobby_data(client_state_t* state) {
+error_code client_read_game_data(client_state_t* state) {
     ChallengePlayerResponseMessage res;
     error_code err = read_message(state->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
@@ -725,7 +727,7 @@ error_code client_read_lobby_data(client_state_t* state) {
     }
 
 
-    state->lobby_id = res.success.lobby_id;
+    state->game_id = res.success.game_id;
     return ERR_NONE;
 }
 
@@ -765,6 +767,7 @@ error_code client_challenge_player(client_state_t* state) {
 
     if (res.error.status_code != STATUS_OK) {
         if (res.error.status_code == STATUS_NOT_FOUND 
+            || res.error.status_code == STATUS_PLAYER_DECLINED
             || res.error.status_code == STATUS_PLAYER_IS_NOT_CONNECTED
             || res.error.status_code == STATUS_PLAYER_IS_NOT_LOOKING_FOR_GAME) {
             fprintf(stderr, RED "ERROR: %s\n" RESET, res.error.message);
@@ -780,7 +783,7 @@ error_code client_challenge_player(client_state_t* state) {
         return ERR_UNKNOWN;
     }
 
-    fprintf(stdout, GREEN "Challenge accepted, entering lobby %d\n" RESET, res.success.lobby_id);
+    fprintf(stdout, GREEN "Challenge accepted, entering game %d\n" RESET, res.success.game_id);
 
     return ERR_NONE;
 }

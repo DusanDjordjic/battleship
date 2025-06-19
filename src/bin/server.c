@@ -1,3 +1,4 @@
+#include "include/game.h"
 #include <include/users.h>
 #include <include/server_handlers.h>
 #include <errno.h>
@@ -42,14 +43,21 @@ int main(int argc, char** argv)
     signal(SIGINT, handle_sigint);
 
 	server_state_t state = { 0 };
+    // TODO load games and set the next id after that
+    state.next_game_id = 1;
+
 	error_code err = server_parse_args(&state, argc, argv);
 	if (err != ERR_NONE) {
 		// server_parse_args will log the error
         return 1; 
     }
 
+    vector_create(&state.games, sizeof(Game));
 	vector_create(&state.clients, sizeof(server_client_t));
-	pthread_mutex_init(&state.clients_lock, NULL);
+
+	pthread_rwlock_init(&state.clients_rwlock, NULL);
+    pthread_rwlock_init(&state.users_rwlock, NULL);
+    pthread_rwlock_init(&state.games_rwlock, NULL);
 
     // Load all users from a file
     // Users load will initalize users vector
@@ -87,7 +95,7 @@ int main(int argc, char** argv)
     
             // try to find disconnected client;
         
-            pthread_mutex_lock(&state.clients_lock);
+            pthread_rwlock_wrlock(&state.clients_rwlock);
 
             server_client_t* client_p = NULL;
             for (uint32_t i = 0; i < state.clients.logical_length; i++) {
@@ -96,7 +104,7 @@ int main(int argc, char** argv)
                     fprintf(stdout, "Found free space for client at index %d, vector len %d\n", i, state.clients.logical_length);
                     // this is free space that we can use
                     client->sock_fd = client_sock_fd;
-                    client->state = &state;
+                    client->server_state = &state;
                     client->addr = client_addr;
                     client->flags = 0;
                     client_p = client;
@@ -108,7 +116,7 @@ int main(int argc, char** argv)
                 // if we didn't find free space add one more
                 server_client_t new_client =  {
                     .sock_fd = client_sock_fd,
-                    .state = &state,
+                    .server_state=  &state,
                     .addr = client_addr,
                     .flags = 0,
                 };
@@ -117,7 +125,7 @@ int main(int argc, char** argv)
                 fprintf(stdout, "Didn't find free space for client, new vector len %d\n", state.clients.logical_length);
             }
 
-            pthread_mutex_unlock(&state.clients_lock);
+            pthread_rwlock_unlock(&state.clients_rwlock);
 
             pthread_create(&(client_p->handler_thread), NULL, handle_client_connetion, client_p);
             pthread_detach(client_p->handler_thread);
@@ -134,8 +142,9 @@ int main(int argc, char** argv)
 	close(state.sock_fd);
 	vector_destroy(&state.clients, NULL);
 	vector_destroy(&state.users, NULL);
-	pthread_mutex_destroy(&state.clients_lock);
-	pthread_mutex_destroy(&state.users_lock);
+	pthread_rwlock_destroy(&state.clients_rwlock);
+	pthread_rwlock_destroy(&state.users_rwlock);
+	pthread_rwlock_destroy(&state.games_rwlock);
 
 	return 0;
 }
@@ -238,6 +247,15 @@ void* handle_client_connetion(void* params)
                 break;
             }
 
+            case MSG_CHALLENGE_ANSWER: {
+                fprintf(stdout, "CLIENT %d: Received challenge answer request\n", client->sock_fd);
+                error_code err = handle_challenge_answer(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send challenge answer response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
             default: {
                 fprintf(stderr, RED "ERROR: CLIENT %d: Message type is unknown %u\n" RESET, client->sock_fd, message_type);
                 error_code err = handle_unknown_request(client);
@@ -250,6 +268,7 @@ void* handle_client_connetion(void* params)
     }
 
     close(client->sock_fd);
+    client->user = NULL;
     client->flags = 0;
     client->sock_fd = -1;
 
