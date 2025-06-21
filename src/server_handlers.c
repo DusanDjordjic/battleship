@@ -431,7 +431,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" doesn't exist", req.target_username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message %d\n" RESET, error_to_string(err), client->sock_fd, res.success.status_code);
         }
         return err;
     }
@@ -441,7 +441,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" is not connected", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message %d\n" RESET, error_to_string(err), client->sock_fd, res.success.status_code);
         }
         return err;
     }
@@ -451,13 +451,13 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" is not looking a for game", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message %d\n" RESET, error_to_string(err), client->sock_fd, res.success.status_code);
         }
         return err;
     }
 
 
-    fprintf(stdout, "Asking other player does he want to play\n");
+    fprintf(stdout, "CLIENT %d: Asking other player does he want to play\n", client->sock_fd);
 
     // Ask other player does he want to play
     err = handle_ask_other_player(client, other);
@@ -466,7 +466,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         sprintf(res.error.message, "Player \"%s\" failed to respond successfully", other->user->username);
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
-            fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
+            fprintf(stderr, RED "%s CLIENT %d: Failed to send message %d\n" RESET, error_to_string(err), client->sock_fd, res.success.status_code);
         }
         return err;
     }
@@ -477,48 +477,13 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
     //
     // To achieve this, create new game lobby with id and add both clients there
 
-    Game* game = server_add_game(client->server_state, game_new(client, other));
-
+    ServerGame* game = server_add_game(client->server_state, game_new(client, other));
+    
     client_join_game(client, game);
     client_join_game(other, game);
 
-    // Client that started the challenge automatically accepted the game
+    // Client that started the challenge automatically acceptes the game
     game_accept(game, client);
-    
-    // if other play declined the request
-    //if (!answer) {
-    //    fprintf(stdout, "Other player said no\n");
-
-    //    res.error.status_code = STATUS_PLAYER_DECLINED;
-    //    sprintf(res.error.message, "Player \"%s\" declined the challenge", other->user.username);
-    //    err = send_message(client->sock_fd, &res, sizeof(res));
-    //    if (err != ERR_NONE) {
-    //        fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-    //    }
-    //    return err;
-    //}
-
-    //fprintf(stdout, "Other player said yes\n");
-    //// TODO:
-    //// Create the game set client statuses to be ingame and create game data where those 2 are going to play
-    //res.success.status_code = STATUS_OK;
-    //res.success.lobby_id = 10;
-
-    //fprintf(stdout, "Sending lobby id to challenger\n");
-    //// Send lobby id to challenger client
-    //err = send_message(client->sock_fd, &res, sizeof(res));
-    //if (err != ERR_NONE) {
-    //    fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-    //    return err;
-    //}
-
-    //fprintf(stdout, "Sending lobby id to challenged\n");
-    //// Send lobby id to challenged client
-    //err = send_message(other->sock_fd, &res, sizeof(res));
-    //if (err != ERR_NONE) {
-    //    fprintf(stderr, RED "%s failed to send message %d\n" RESET, error_to_string(err), res.success.status_code);
-    //    return err;
-    //}
 
     return ERR_NONE;
 }
@@ -565,13 +530,13 @@ error_code handle_challenge_answer(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    Game* game = client->game;
+    ServerGame* game = client->game;
     server_client_t* other = game_other_player(game, client);
 
     if (req.accept) {
         res.success.status_code = STATUS_OK;
         res.success.game_id = client->game->id;
-
+    
         game_accept(game, client);
 
         err = send_message(client->sock_fd, &res, sizeof(res));

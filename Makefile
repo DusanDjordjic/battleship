@@ -3,8 +3,8 @@ CWD=$(shell pwd)
 CC=gcc
 CFLAGS=-Wall -Wextra -I$(CWD) -Wpedantic
 # LFLAGS=-pthread -lncurses
-LFLAGS=-pthread -lvector -L$(CWD)/external/vector -Wl,-rpath,$(CWD)/external/vector 
-TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -I$(CWD) -lcriterion -Wl,-rpath,$(CWD)/external/criterion-2.4.2
+LFLAGS=-pthread -lvector -L$(CWD)/external/vector -Wl,-rpath,'$$ORIGIN'/../external/vector 
+TEST_LFLAGS=-L$(CWD)/external/criterion-2.4.2 -I$(CWD) -lcriterion -Wl,-rpath,'$$ORIGIN'/../external/criterion-2.4.2
 
 # Folders
 SRC=src
@@ -16,7 +16,8 @@ TESTS=tests
 HEADERS=$(INC)/args.h $(INC)/errors.h $(INC)/io.h \
 	$(INC)/menu.h $(INC)/server.h $(INC)/state.h $(INC)/server.h \
 	$(INC)/globals.h $(INC)/messages.h $(INC)/server_handlers.h	\
-	$(INC)/server_utils.h $(INC)/game.h $(INC)/vector/vector.h
+	$(INC)/server_utils.h $(INC)/game.h $(INC)/vector/vector.h \
+	$(INC)/game_ship.h
 
 SERVER_SRCS=$(SRC)/error.c $(SRC)/server_start.c $(SRC)/args.c $(SRC)/messages.c \
 			$(SRC)/users.c $(SRC)/server_handlers.c $(SRC)/server_utils.c $(SRC)/game.c
@@ -25,13 +26,14 @@ SERVER_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS)))
 SERVER_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS_BINARY)))
 SERVER_BIN=$(BIN)/server.out
 
-CLIENT_SRCS=$(SRC)/io.c $(SRC)/error.c $(SRC)/menu.c $(SRC)/args.c $(SRC)/messages.c
+CLIENT_SRCS=$(SRC)/io.c $(SRC)/error.c $(SRC)/menu.c $(SRC)/args.c $(SRC)/messages.c $(SRC)/game_ship.c \
+			$(SRC)/coordinate.c
 CLIENT_SRCS_BINARY=$(SRC)/bin/client.c
 CLIENT_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS)))
 CLIENT_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS_BINARY)))
 CLIENT_BIN=$(BIN)/client.out
 
-TESTS_SRCS=$(TESTS)/test_tcp_server.c
+TESTS_SRCS=$(TESTS)/test_tcp_server.c $(TESTS)/test_coordinate.c $(TESTS)/test_game_ship.c
 TESTS_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(TESTS_SRCS)))
 TESTS_ALL_SRCS=$(SERVER_SRCS) $(CLIENT_SRCS) $(TESTS_SRCS)
 TESTS_ALL_OBJS=$(SERVER_OBJS) $(CLIENT_OBJS) $(TESTS_OBJS)

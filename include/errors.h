@@ -41,6 +41,16 @@ void error_print(error_code error);
 #define ERR_PERMISSION_DENIED 2010
 // Unauthorized
 #define ERR_UNATHORIZED 2011
+// Invalid ship coordinates, ship's width and/or height
+// do not match the coordinates ones got from coordinates
+#define ERR_SHIP_ICOORDINATES 2012
+// Invalid coordinate, coordinate parts are either negative 
+// or outside of board
+#define ERR_ICOORDINATE 2013
+// Coordinate where ship should be placed is occupied 
+// or coordinates next to that one are occupied because 
+// ships cannot be placed next to one another
+#define ERR_SHIP_COORDINATE_OCCUPIED 2014
 
 // Server Errors 
 #define ERR_USERNAME_EXISTS 3001

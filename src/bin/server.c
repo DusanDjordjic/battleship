@@ -1,4 +1,3 @@
-#include "include/game.h"
 #include <include/users.h>
 #include <include/server_handlers.h>
 #include <errno.h>
@@ -52,7 +51,7 @@ int main(int argc, char** argv)
         return 1; 
     }
 
-    vector_create(&state.games, sizeof(Game));
+    vector_create(&state.games, sizeof(ServerGame));
 	vector_create(&state.clients, sizeof(server_client_t));
 
 	pthread_rwlock_init(&state.clients_rwlock, NULL);

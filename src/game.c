@@ -2,11 +2,9 @@
 #include "include/game.h"
 #include "include/globals.h"
 #include "include/state.h"
-// Needed for UNREACHABLE
-#include <stdio.h>
 
-Game game_new(server_client_t* first, server_client_t* second) {
-    Game game = {
+ServerGame game_new(server_client_t* first, server_client_t* second) {
+    ServerGame game = {
         .first = first,
         .first_accepted = 0,
         .second = second,
@@ -17,7 +15,7 @@ Game game_new(server_client_t* first, server_client_t* second) {
     return game;
 }
 
-void game_accept(Game* game, server_client_t* client) {
+void game_accept(ServerGame* game, server_client_t* client) {
     if (game->first == client) {
         game->first_accepted = 1;
         return;
@@ -31,11 +29,11 @@ void game_accept(Game* game, server_client_t* client) {
     UNREACHABLE;
 }
 
-uint8_t game_accepted(Game *game) {
+uint8_t game_accepted(ServerGame *game) {
     return game->first_accepted && game->second_accepted;
 }
 
-server_client_t* game_other_player(Game* game, server_client_t* player) {
+server_client_t* game_other_player(ServerGame* game, server_client_t* player) {
     if (game->first == player) {
         return game->second;
     }

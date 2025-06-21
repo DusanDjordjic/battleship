@@ -2,6 +2,7 @@
 #define GLOBALS_H
 
 #include <stdlib.h>
+#include <stdio.h>
 
 #define UNREACHABLE                                                             \
 	{                                                                           \
@@ -67,4 +68,14 @@
 #define CLIENT_LOGGED_IN (1 << 0)
 #define CLIENT_LOOKING_FOR_GAME (1 << 1)
 
+// Game specific flags
+#define GAME_STATE_ACCEPTING 1
+
+#define GAME_WIDTH 8
+#define GAME_HEIGHT 8
+
+#define GAME_FIELD_EMPTY 0
+#define GAME_FIELD_SHIP 1
+#define GAME_FIELD_HIT 2
+#define GAME_FIELD_MISS 3
 #endif

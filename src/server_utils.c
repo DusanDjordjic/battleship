@@ -3,7 +3,6 @@
 #include "include/users.h"
 #include "include/vector/vector.h"
 #include <pthread.h>
-#include <stdio.h>
 #include <string.h>
 
 server_user_t* server_add_user(server_state_t* state, server_user_t user) {
@@ -63,7 +62,7 @@ server_client_t* server_find_client_by_username(server_state_t* state, char* use
 }
 
 
-Game* server_add_game(server_state_t* state, Game game) {
+ServerGame* server_add_game(server_state_t* state, ServerGame game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
     game.id = state->next_game_id;
     state->next_game_id++;
@@ -72,12 +71,12 @@ Game* server_add_game(server_state_t* state, Game game) {
     // like we do with clients
     
     vector_push(&state->games, &game);
-    Game* out = vector_at(&state->games, state->games.logical_length - 1);
+    ServerGame* out = vector_at(&state->games, state->games.logical_length - 1);
     pthread_rwlock_unlock(&state->games_rwlock);
     return out;
 }
 
-void server_remove_game(server_state_t* state, Game* game) {
+void server_remove_game(server_state_t* state, ServerGame* game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
    
     game->game_state = 0;
@@ -114,6 +113,6 @@ void client_clear_looking_for_game(server_client_t* client) {
     client->flags &= ~CLIENT_LOOKING_FOR_GAME;
 }
 
-void client_join_game(server_client_t* client, Game* game) {
+void client_join_game(server_client_t* client, ServerGame* game) {
     client->game = game;
 }

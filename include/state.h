@@ -2,13 +2,19 @@
 #define STATE_H
 
 #include "include/users.h"
-#include "vector/vector.h"
+#include "include/globals.h"
+#include "include/vector/vector.h"
 #include <bits/pthreadtypes.h>
 #include <netinet/in.h>
 #include <stdint.h>
-#include <include/globals.h>
 
-typedef struct Game Game;
+typedef struct ServerGame ServerGame;
+
+typedef struct {
+    uint32_t game_id;
+    uint8_t my_state[GAME_WIDTH * GAME_HEIGHT];
+    uint8_t opponents_state[GAME_WIDTH * GAME_HEIGHT];
+} ClientGame;
 
 // Client types 
 
@@ -23,7 +29,7 @@ typedef struct {
     // Api token used in requests
 	char api_key[API_KEY_LEN];
     // If lobby_id is not 0 that meants that player is in game
-    uint32_t game_id;
+    ClientGame game;
 } client_state_t;
 
 
@@ -49,9 +55,7 @@ typedef struct {
     // Clients can trigger signup which will modify the users 
     // Clients can trigger login which needs to read the users
     pthread_rwlock_t users_rwlock;
-
 } server_state_t;
-
 
 typedef struct {
     // Thread that handles client connection
@@ -67,10 +71,10 @@ typedef struct {
 	struct sockaddr_in addr;
     char api_key[API_KEY_LEN];
     uint32_t flags;
-    Game* game;
+    ServerGame* game;
 } server_client_t;
 
-struct Game{
+struct ServerGame{
     uint32_t id;
     server_client_t* first;
     uint8_t first_accepted;

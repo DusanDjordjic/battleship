@@ -1,15 +1,17 @@
+#include "include/game_ship.h"
+#include "include/globals.h"
+#include "include/messages.h"
+#include "include/errors.h"
+#include "include/io.h"
+#include "include/menu.h"
+#include "include/args.h"
+#include "include/state.h"
+#include "include/coordinate.h"
+
 #include <pthread.h>
-#include <include/globals.h>
-#include <include/messages.h>
-#include <asm-generic/errno-base.h>
-#include <include/errors.h>
-#include <include/io.h>
-#include <include/menu.h>
-#include <include/args.h>
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
-#include <include/state.h>
 #include <ncurses.h>
 #include <netinet/in.h>
 #include <stdint.h>
@@ -30,9 +32,26 @@ error_code client_challenge_player(client_state_t* state);
 error_code client_respond_to_challenge(client_state_t* state, uint8_t* answer);
 error_code client_read_game_data(client_state_t* state);
 
+error_code client_start_game(client_state_t* state);
+error_code client_setup_game(client_state_t* state);
+error_code client_print_game(client_state_t* state);
+
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
 void* print_loading(void* param);
+
+GameShip avaiable_ships [10] = {
+    {.width = 4, .height = 1},
+    {.width = 3, .height = 1},
+    {.width = 3, .height = 1},
+    {.width = 2, .height = 1},
+    {.width = 2, .height = 1},
+    {.width = 2, .height = 1},
+    {.width = 1, .height = 1},
+    {.width = 1, .height = 1},
+    {.width = 1, .height = 1},
+    {.width = 1, .height = 1},
+};
 
 void menu_item_display(menu_item_t* item)
 {
@@ -63,9 +82,8 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	uint32_t choice;
+	uint32_t choice = 0;
 	while (1) {
-
 		error_code err = menu_display(&menu, &choice, menu_item_display);
 		switch (err) {
 		case ERR_MENU_IOPTION:
@@ -83,6 +101,7 @@ int main(int argc, char** argv)
 		default:
 			UNREACHABLE;
 		}
+
 
 		// Handle user input based on current page index and selected index
 		switch (menu.current_index) {
@@ -116,9 +135,18 @@ int main(int argc, char** argv)
 				break;
 			case 2:
                 client_look_for_game(&state);
+                // We successfully joined the game
+                if (state.game.game_id != 0) {
+                    client_start_game(&state);
+                }
+
 				break;
 			case 3:
                 client_challenge_player(&state);
+                // We successfully joined the game
+                if (state.game.game_id != 0) {
+                    client_start_game(&state);
+                }
 				break;
 			case 4:
 				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
@@ -633,18 +661,15 @@ error_code client_look_for_game(client_state_t* state) {
     }
 
     if (!accepted)  {
-        fprintf(stdout, "I didn't accept the game so canceling the looking for game\n");
         return client_cancel_look_for_game(state);
     }
    
-    fprintf(stdout, "I accepted the game, waiting to get lobby id from server\n");
-
     err = client_read_game_data(state);
     if (err != ERR_NONE) {
         return err;
     }
 
-    fprintf(stdout, GREEN "Joined game %d\n" RESET, state->game_id);
+    fprintf(stdout, GREEN "Joined a new game with id %d\n" RESET, state->game.game_id);
 
     return ERR_NONE;
 }
@@ -703,7 +728,6 @@ error_code client_respond_to_challenge(client_state_t* state, uint8_t* accepted)
         res.accept  = 0;
     }
 
-    fprintf(stdout,"Sending back my answer %d\n", res.accept);
     err = send_message(state->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
         fprintf(stderr, RED "%s Failed to send accept challenge response message\n" RESET, error_to_string(err));
@@ -726,8 +750,8 @@ error_code client_read_game_data(client_state_t* state) {
         return ERR_UNKNOWN;
     }
 
+    state->game.game_id = res.success.game_id;
 
-    state->game_id = res.success.game_id;
     return ERR_NONE;
 }
 
@@ -783,7 +807,171 @@ error_code client_challenge_player(client_state_t* state) {
         return ERR_UNKNOWN;
     }
 
-    fprintf(stdout, GREEN "Challenge accepted, entering game %d\n" RESET, res.success.game_id);
+    state->game.game_id = res.success.game_id;
+    fprintf(stdout, GREEN "Joined a new game with id %d\n" RESET, state->game.game_id);
+
+    return ERR_NONE;
+}
+ 
+error_code client_start_game(client_state_t* state) {
+    memset(state->game.my_state, GAME_FIELD_EMPTY, GAME_HEIGHT * GAME_WIDTH);
+
+    error_code err = client_setup_game(state);
+    if (err != ERR_NONE) {
+        // TODO Send message to server that we quite the game
+    }
+
+    return ERR_NONE;
+}
+
+error_code client_setup_game(client_state_t* state) {
+    char cmd[3];
+    
+    uint8_t ships_len = sizeof(avaiable_ships) / sizeof(GameShip);
+    for (uint8_t i = 0; i < ships_len; i++) { 
+        GameShip s = avaiable_ships[i];
+
+        while(1) {
+            error_code err = client_print_game(state);
+            if (err != ERR_NONE) {
+                UNREACHABLE;
+            }
+
+            while(1) {
+                fprintf(stdout, "Ship %dx%d start coordinates (example: A1): ", s.width, s.height);
+                err = read_line(cmd, sizeof(cmd));
+                switch (err) {
+                    case ERR_UNKNOWN:
+                    case ERR_IIN:
+                        error_print(err);
+                        continue;
+                    case ERR_NONE:
+                        break;
+                }
+
+                Coordinate c = { .x = cmd[0] - 'A', .y = cmd[1] - '1' };
+                err = coordinate_validate(c);
+                if (err != ERR_NONE) {
+                    continue;
+                }
+
+                s.start = c;
+                break;
+            }
+            
+            // If ship is 1x1 then end coordinate is the same as start coordinate
+            if (s.width == 1 && s.height == 1) {
+                s.end = s.start;
+            } else {
+                while(1) {
+                    fprintf(stdout, "Ship %dx%d end coordinates (example: C1): ", s.width, s.height);
+                    err = read_line(cmd, sizeof(cmd));
+                    switch (err) {
+                        case ERR_UNKNOWN:
+                        case ERR_IIN:
+                            error_print(err);
+                            continue;
+                        case ERR_NONE:
+                            break;
+                    }
+
+                    Coordinate c = { .x = cmd[0] - 'A', .y = cmd[1] - '1' };
+                    err = coordinate_validate(c);
+                    if (err != ERR_NONE) {
+                        continue;
+                    }
+
+                    s.end = c;
+                    break;
+                }
+            }
+           
+            err = game_ship_validate_coordinates(s);
+            if (err != ERR_NONE) {
+                continue;
+            }
+            
+            err = game_ship_validate_fields(state->game.my_state, s);
+            if (err != ERR_NONE) {
+                continue;
+            }
+
+            // Place the ship on board
+            uint8_t xstart, xend;
+            uint8_t ystart, yend;
+        
+            if (s.start.x <= s.end.x) {
+                xstart = s.start.x;
+                xend = s.end.x;
+            } else {
+                xstart = s.end.x;
+                xend = s.start.x;
+            }
+
+            if (s.start.y <= s.end.y) {
+                ystart = s.start.y;
+                yend = s.end.y;
+            } else {
+                ystart = s.end.y;
+                yend = s.start.y;
+            }
+            
+
+            for (uint8_t x = xstart; x <= xend; x++) {
+                for (uint8_t y = ystart; y <= yend; y++) {
+                    state->game.my_state[x + y * GAME_WIDTH] = GAME_FIELD_SHIP;
+                }
+            }
+
+            fprintf(stdout, "Ship %dX%d placed, start (%c,%c) end (%c,%c)\n", 
+                s.width, s.height, xstart + 'A', ystart + '1', xend + 'A', yend + '1');
+
+            break;
+        }
+    }
+
+    // print the game one last time
+    error_code err = client_print_game(state);
+    if (err != ERR_NONE) {
+        UNREACHABLE;
+    }
+
+    return ERR_NONE;
+}
+
+error_code client_print_game(client_state_t* state) {
+    // 1 for first space 
+    // for every letter 2 (1 for space one for letter)
+    // 1 for \0
+    char header[1 + GAME_WIDTH * 2 + 1] = {0};
+    header[0] = ' ';
+    for (uint8_t y = 0; y < GAME_WIDTH; y++) {
+        sprintf(header + 1 + y * 2, " %c", 'A' + y);
+        
+    }
+
+    fprintf(stdout, "%s\n", header);
+
+    for (uint8_t y = 0; y < GAME_HEIGHT; y++) {
+        printf("%d", y + 1); 
+        for (uint8_t x = 0; x < GAME_WIDTH; x++) {
+            switch (state->game.my_state[x + y * GAME_WIDTH]) {
+                case GAME_FIELD_EMPTY:
+                    printf(" ."); 
+                    break;
+                case GAME_FIELD_MISS:
+                    printf(" -"); 
+                    break;
+                case GAME_FIELD_HIT:
+                    printf(" X"); 
+                    break;
+                case GAME_FIELD_SHIP:
+                    printf(" S"); 
+                    break;
+            }
+        }
+        printf("\n");
+    }
 
     return ERR_NONE;
 }
