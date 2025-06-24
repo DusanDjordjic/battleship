@@ -8,13 +8,13 @@
 #include <netinet/in.h>
 #include <stdint.h>
 
-typedef struct ServerGame ServerGame;
+typedef struct server_game server_game;
 
 typedef struct {
     uint32_t game_id;
     uint8_t my_state[GAME_WIDTH * GAME_HEIGHT];
     uint8_t opponents_state[GAME_WIDTH * GAME_HEIGHT];
-} ClientGame;
+} client_game;
 
 // Client types 
 
@@ -29,7 +29,7 @@ typedef struct {
     // Api token used in requests
 	char api_key[API_KEY_LEN];
     // If lobby_id is not 0 that meants that player is in game
-    ClientGame game;
+    client_game game;
 } client_state_t;
 
 
@@ -71,16 +71,28 @@ typedef struct {
 	struct sockaddr_in addr;
     char api_key[API_KEY_LEN];
     uint32_t flags;
-    ServerGame* game;
+    server_game* game;
 } server_client_t;
 
-struct ServerGame{
+struct server_game {
     uint32_t id;
+
     server_client_t* first;
-    uint8_t first_accepted;
     server_client_t* second;
+
+    uint8_t first_accepted;
     uint8_t second_accepted;
-    uint8_t game_state;
+
+    // General game state like started, waiting, etc..
+    uint8_t state;
+
+    // prevent concurrent access from both players at the same time
+    pthread_mutex_t lock;
+
+    uint8_t first_game_state[GAME_WIDTH * GAME_HEIGHT];
+    uint8_t second_game_state[GAME_WIDTH * GAME_WIDTH];
+    uint8_t first_state_set;
+    uint8_t second_state_set;
 };
 
 #endif

@@ -1,5 +1,7 @@
+#include "include/game.h"
 #include <include/users.h>
 #include <include/server_handlers.h>
+#include <include/server_utils.h>
 #include <errno.h>
 #include <include/globals.h>
 #include <include/messages.h>
@@ -25,6 +27,7 @@
 #define USERS_FILEPATH "./users.db"
 
 void* handle_client_connetion(void* params);
+void handle_client_disconnect(server_client_t* client);
 void generate_random_hex_string(char* buffer, uint32_t len);
 
 volatile sig_atomic_t interrupted = 0;
@@ -51,7 +54,7 @@ int main(int argc, char** argv)
         return 1; 
     }
 
-    vector_create(&state.games, sizeof(ServerGame));
+    vector_create(&state.games, sizeof(server_game));
 	vector_create(&state.clients, sizeof(server_client_t));
 
 	pthread_rwlock_init(&state.clients_rwlock, NULL);
@@ -245,12 +248,20 @@ void* handle_client_connetion(void* params)
                 }
                 break;
             }
-
             case MSG_CHALLENGE_ANSWER: {
                 fprintf(stdout, "CLIENT %d: Received challenge answer request\n", client->sock_fd);
                 error_code err = handle_challenge_answer(client, buffer);
                 if (err != ERR_NONE) {
                     fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send challenge answer response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
+            case MSG_GAME_START: {
+                fprintf(stdout, "CLIENT %d: Received game start request\n", client->sock_fd);
+                error_code err = handle_game_start(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game start response, %d - %s\n" RESET,
                             client->sock_fd, err, error_to_string(err));
                 }
                 break;
@@ -266,12 +277,24 @@ void* handle_client_connetion(void* params)
         }
     }
 
+    handle_client_disconnect(client);
+
+	return NULL;
+}
+
+void handle_client_disconnect(server_client_t* client) {
     close(client->sock_fd);
     client->user = NULL;
     client->flags = 0;
     client->sock_fd = -1;
 
-    // TODO Switch from vec to using linked list
-	return NULL;
-}
+    if (client->game == NULL) {
+        return;
+    }
 
+    if (client->game->state != GAME_STATE_CLOSED) {
+        // close the game, other client will get an error when he tries to 
+        // send some game events 
+        server_remove_game(client->server_state, client->game); 
+    }
+}

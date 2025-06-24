@@ -471,13 +471,13 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    // Send the message to the other player when he responds we will get that requets in 
+    // Send the message to the other player. When he responds we will get that requets in 
     // handle_client function and should process it there because its only valid if we 
     // read messages from one place to avoid race conditions.
     //
-    // To achieve this, create new game lobby with id and add both clients there
+    // To achieve this, create new game with id and add both clients there
 
-    ServerGame* game = server_add_game(client->server_state, game_new(client, other));
+    server_game* game = server_add_game(client->server_state, game_new(client, other));
     
     client_join_game(client, game);
     client_join_game(other, game);
@@ -530,7 +530,7 @@ error_code handle_challenge_answer(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    ServerGame* game = client->game;
+    server_game* game = client->game;
     server_client_t* other = game_other_player(game, client);
 
     if (req.accept) {
@@ -567,6 +567,102 @@ error_code handle_challenge_answer(server_client_t* client, const char* buffer) 
     other->game = NULL;
 
     server_remove_game(client->server_state, game);
+
+    return ERR_NONE;
+}
+
+error_code handle_game_start(server_client_t* client, const char* buffer) {
+    error_code err = ERR_NONE;
+    GameStartResponseMessage res = {0};
+
+    if (!client_logged_in(client)) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send unauthorized response\n" RESET, client->sock_fd);
+        }
+        return err;
+    }
+
+    GameStartRequestMessage req = *(GameStartRequestMessage*)(buffer);
+    if (strncmp(req.api_key, client->api_key, API_KEY_LEN) != 0) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send unauthorized response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (client->game == NULL) {
+        res.error.status_code = STATUS_GAME_NOT_STARTED;
+        sprintf(res.error.message, "Game hasn't started yet");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+    
+    if (game_closed(client->game)) {
+        res.error.status_code = STATUS_GAME_ABANDONED;
+        sprintf(res.error.message, "Other player closed the connection so the game is abandoned");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (!game_accepted(client->game)) {
+        res.error.status_code = STATUS_GAME_NOT_STARTED;
+        sprintf(res.error.message, "Game isn't accepted by both players");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    // If the game is running and both players accepted the game
+    // read the clients data and update the his game state
+    game_set_clients_game_state(client->game, client, req.game_state);
+    
+    fprintf(stdout, GREEN "CLIENT %d: GAME %d: Successfully set the game state\n" RESET, client->sock_fd, client->game->id);
+
+    // If this was the second player setting his game state 
+    // the game has started.
+    if (game_started(client->game)) {
+        fprintf(stdout, GREEN "GAME %d: Game has started\n" RESET, client->game->id);
+
+        // send response to both clients that game has started
+        server_client_t* other = game_other_player(client->game, client);
+
+        res.success.status_code = STATUS_OK;
+        
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game started response\n" RESET, client->sock_fd);
+        }
+
+        err = send_message(other->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game started response\n" RESET, other->sock_fd);
+        }
+
+        return err;
+    }
 
     return ERR_NONE;
 }

@@ -1,3 +1,4 @@
+#include "include/game.h"
 #include "include/globals.h"
 #include "include/state.h"
 #include "include/users.h"
@@ -62,29 +63,36 @@ server_client_t* server_find_client_by_username(server_state_t* state, char* use
 }
 
 
-ServerGame* server_add_game(server_state_t* state, ServerGame game) {
+server_game* server_add_game(server_state_t* state, server_game game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
     game.id = state->next_game_id;
     state->next_game_id++;
 
-    // TODO find first available space to put the game in
-    // like we do with clients
-    
-    vector_push(&state->games, &game);
-    ServerGame* out = vector_at(&state->games, state->games.logical_length - 1);
+    // Try to find a free space in games vector to add the new game
+    server_game* out = NULL;
+    for (uint32_t i = 0; i < state->games.logical_length; i++) {
+        server_game* g = vector_at(&state->games, i);
+        if (g->state == GAME_STATE_CLOSED) {
+            out = g;
+            break;
+        }
+    }
+
+    if (out == NULL) {
+        vector_push(&state->games, &game);
+        out = vector_at(&state->games, state->games.logical_length - 1);
+    } else {
+        *out = game;
+    }
+
     pthread_rwlock_unlock(&state->games_rwlock);
     return out;
 }
 
-void server_remove_game(server_state_t* state, ServerGame* game) {
+void server_remove_game(server_state_t* state, server_game* game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
-   
-    game->game_state = 0;
-    game->first = NULL;
-    game->second = NULL;
-    game->first_accepted = 0;
-    game->second_accepted = 0;
-    game->id = 0;
+  
+    game_close(game);
 
     pthread_rwlock_unlock(&state->games_rwlock);
 
@@ -113,6 +121,6 @@ void client_clear_looking_for_game(server_client_t* client) {
     client->flags &= ~CLIENT_LOOKING_FOR_GAME;
 }
 
-void client_join_game(server_client_t* client, ServerGame* game) {
+void client_join_game(server_client_t* client, server_game* game) {
     client->game = game;
 }

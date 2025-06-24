@@ -29,6 +29,7 @@
 #define MSG_CHALLENGE_PLAYER 7
 #define MSG_CHALLENGE_QUESTION 8 // This is sent to the client
 #define MSG_CHALLENGE_ANSWER 9
+#define MSG_GAME_START 10
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -48,6 +49,10 @@
 #define STATUS_PLAYER_ERROR 8
 // Other player declined game
 #define STATUS_PLAYER_DECLINED 9
+// Player sent a request related to game but he isn't playing any game
+#define STATUS_GAME_NOT_STARTED 10
+// Player closed the connection so the game is abandoned
+#define STATUS_GAME_ABANDONED 11
 
 // Unknown error
 #define STATUS_UNKNOWN_ERROR 255 
@@ -69,10 +74,13 @@
 #define CLIENT_LOOKING_FOR_GAME (1 << 1)
 
 // Game specific flags
+#define GAME_STATE_CLOSED 0
 #define GAME_STATE_ACCEPTING 1
+#define GAME_STATE_WAITING_FOR_PLAYERS_STATES 2
+#define GAME_STATE_STARTED 3
 
-#define GAME_WIDTH 8
-#define GAME_HEIGHT 8
+#define GAME_WIDTH 3
+#define GAME_HEIGHT 3
 
 #define GAME_FIELD_EMPTY 0
 #define GAME_FIELD_SHIP 1

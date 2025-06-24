@@ -81,6 +81,15 @@ typedef union {
     ErrorResponseMessage error; 
 } ChallengePlayerResponseMessage;
 
+typedef struct {
+    uint8_t status_code;
+} GameStartSuccessResponseMessage;
+
+typedef union {
+    GameStartSuccessResponseMessage success;
+    ErrorResponseMessage error; 
+} GameStartResponseMessage;
+
 // Requests 
 typedef struct {
     uint8_t type;
@@ -136,5 +145,11 @@ typedef struct {
     uint8_t accept;
     char api_key[API_KEY_LEN];
 } ChallengeAnswerRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+    uint8_t game_state[GAME_HEIGHT * GAME_WIDTH];
+} GameStartRequestMessage;
 
 #endif

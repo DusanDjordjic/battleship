@@ -12,7 +12,6 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <errno.h>
-#include <ncurses.h>
 #include <netinet/in.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -40,15 +39,15 @@ error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
 void* print_loading(void* param);
 
-GameShip avaiable_ships [10] = {
-    {.width = 4, .height = 1},
-    {.width = 3, .height = 1},
-    {.width = 3, .height = 1},
+GameShip avaiable_ships [3] = {
+    // {.width = 4, .height = 1},
+    // {.width = 3, .height = 1},
+    // {.width = 3, .height = 1},
+    // {.width = 2, .height = 1},
+    // {.width = 2, .height = 1},
     {.width = 2, .height = 1},
-    {.width = 2, .height = 1},
-    {.width = 2, .height = 1},
-    {.width = 1, .height = 1},
-    {.width = 1, .height = 1},
+    // {.width = 1, .height = 1},
+    // {.width = 1, .height = 1},
     {.width = 1, .height = 1},
     {.width = 1, .height = 1},
 };
@@ -782,7 +781,45 @@ error_code client_challenge_player(client_state_t* state) {
         return err;
     }
 
+    fprintf(stdout, "Waiting for %s's response\n", target);
+
+    struct pollfd poll_fds[1] = {
+        {.fd = state->sock_fd, .events = POLLIN},
+    };
+
+    int timeout = 300;
+    int dots_count = 0; 
+
+    while(1) {
+        int ret = poll(poll_fds, 1, timeout); 
+        if (ret == -1) {
+            fprintf(stderr, RED "ERROR: poll failed %s\n" RESET, strerror(errno));
+            break;
+        } 
+
+        if (ret == 0) {
+            if (dots_count == 10) {
+                printf("\r          \r"); 
+                fflush(stdout);
+                dots_count = 0;
+                continue;
+            }
+            putchar('.');
+            fflush(stdout);
+            dots_count++;
+            continue;
+        }
+
+
+        if (poll_fds[0].revents & POLLIN) {
+            break;
+        }
+    }
+
+    fprintf(stdout, "\n");
+
     ChallengePlayerResponseMessage res;
+
     err = read_message(state->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
         fprintf(stderr, RED "%s Failed to read challenge player request\n" RESET, error_to_string(err));
@@ -818,8 +855,45 @@ error_code client_start_game(client_state_t* state) {
 
     error_code err = client_setup_game(state);
     if (err != ERR_NONE) {
-        // TODO Send message to server that we quite the game
+        fprintf(stderr, RED "%s Failed to setup game\n" RESET, error_to_string(err));
+        return err;
     }
+
+    GameStartRequestMessage req;
+    req.type = MSG_GAME_START;
+    strncpy(req.api_key, state->api_key, API_KEY_LEN);
+    memcpy(req.game_state, state->game.my_state, GAME_WIDTH * GAME_HEIGHT);
+    
+    err = send_message(state->sock_fd, &req, sizeof(req));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to send game start request\n" RESET, error_to_string(err));
+        return err;
+    }
+   
+    GameStartResponseMessage res;
+    // TODO use poll to wait for state sock and display dots
+    //
+    err = read_message(state->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s Failed to read game start response\n" RESET, error_to_string(err));
+        return err;
+    }
+
+    if (res.error.status_code != STATUS_OK) {
+        fprintf(stderr, RED "ERORR: %s\n" RESET, res.error.message);
+        switch (res.error.status_code) {
+            case STATUS_UNAUTHORIZED:
+                return ERR_UNATHORIZED;
+            case STATUS_GAME_NOT_STARTED:
+                return ERR_GAME_NOT_STARTED;
+            case STATUS_GAME_ABANDONED:
+                return ERR_GAME_ABANDONED;
+            default:
+                return ERR_UNKNOWN;
+        }
+    }
+
+    fprintf(stdout, GREEN "Other player has set his ships, the game starts. GOOD LUCK!\n" RESET);
 
     return ERR_NONE;
 }
@@ -828,6 +902,7 @@ error_code client_setup_game(client_state_t* state) {
     char cmd[3];
     
     uint8_t ships_len = sizeof(avaiable_ships) / sizeof(GameShip);
+
     for (uint8_t i = 0; i < ships_len; i++) { 
         GameShip s = avaiable_ships[i];
 

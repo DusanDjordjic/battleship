@@ -51,7 +51,10 @@ void error_print(error_code error);
 // or coordinates next to that one are occupied because 
 // ships cannot be placed next to one another
 #define ERR_SHIP_COORDINATE_OCCUPIED 2014
-
+// Game isn't started
+#define ERR_GAME_NOT_STARTED 2015
+// Other player closed the connection and the game
+#define ERR_GAME_ABANDONED 2016
 // Server Errors 
 #define ERR_USERNAME_EXISTS 3001
 
