@@ -1103,14 +1103,6 @@ error_code client_print_game(uint8_t* game_state) {
 error_code client_play_game(client_state_t* state, uint8_t my_turn) {
     error_code err;
     while (1) {
-        fprintf(stdout, "MY TURN %d\n", my_turn);
-
-        fprintf(stdout, BLUE "My Board\n" RESET);
-        client_print_game(state->game.my_state);
-
-        fprintf(stdout, RED "Opponent's Board\n" RESET);
-        client_print_game(state->game.opponents_state);
-
         if (my_turn) {
             my_turn = 0;
             err = client_make_move(state);
@@ -1137,6 +1129,9 @@ error_code client_register_opponents_move(client_state_t* state) {
     error_code err = ERR_NONE;
 
     while (1) {
+        fprintf(stdout, BLUE "My Board\n" RESET);
+        client_print_game(state->game.my_state);
+
         fprintf(stdout, "Waiting for opponent to make a move\n");
         RegisterShotRequestMessage req;
         err = read_message(state->sock_fd, &req, sizeof(req));
@@ -1168,6 +1163,9 @@ error_code client_make_move(client_state_t* state) {
     Coordinate c;
 
     while (1) {
+        fprintf(stdout, RED "Opponent's Board\n" RESET);
+        client_print_game(state->game.opponents_state);
+
         while(1) {
             fprintf(stdout, "Enter coordinates to shoot at (example: A1): ");
             err = read_line(cmd, sizeof(cmd));
