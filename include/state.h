@@ -93,6 +93,8 @@ struct server_game {
     uint8_t second_game_state[GAME_WIDTH * GAME_WIDTH];
     uint8_t first_state_set;
     uint8_t second_state_set;
+
+    uint8_t turn;
 };
 
 #endif

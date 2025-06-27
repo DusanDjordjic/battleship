@@ -650,10 +650,19 @@ error_code handle_game_start(server_client_t* client, const char* buffer) {
         server_client_t* other = game_other_player(client->game, client);
 
         res.success.status_code = STATUS_OK;
-        
+
+        uint8_t my_turn = game_set_inital_turn(client->game, client);
+        res.success.first_turn = my_turn;
+
         err = send_message(client->sock_fd, &res, sizeof(res));
         if (err != ERR_NONE) {
             fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game started response\n" RESET, client->sock_fd);
+        }
+
+        if (my_turn == 1) {
+            res.success.first_turn = 0;
+        } else {
+            res.success.first_turn = 1;
         }
 
         err = send_message(other->sock_fd, &res, sizeof(res));
@@ -662,6 +671,167 @@ error_code handle_game_start(server_client_t* client, const char* buffer) {
         }
 
         return err;
+    }
+
+    return ERR_NONE;
+}
+
+error_code handle_players_shot(server_client_t* client, const char* buffer) {
+    error_code err = ERR_NONE;
+    PlayersShotResponseMessage res = {0};
+
+    if (!client_logged_in(client)) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send unauthorized response\n" RESET, client->sock_fd);
+        }
+        return err;
+    }
+
+    PlayersShotRequestMessage req = *(PlayersShotRequestMessage*)(buffer);
+    if (strncmp(req.api_key, client->api_key, API_KEY_LEN) != 0) {
+        res.error.status_code = STATUS_UNAUTHORIZED;
+        sprintf(res.error.message, "Invalid api token");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send unauthorized response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (client->game == NULL) {
+        res.error.status_code = STATUS_GAME_NOT_STARTED;
+        sprintf(res.error.message, "Game hasn't started yet");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+    
+    if (game_closed(client->game)) {
+        res.error.status_code = STATUS_GAME_ABANDONED;
+        sprintf(res.error.message, "Other player closed the connection so the game is abandoned");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (!game_started(client->game)) {
+        res.error.status_code = STATUS_GAME_NOT_STARTED;
+        sprintf(res.error.message, "Game hasn't started yet");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game not started response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+
+    fprintf(stdout, "CLIENT %d: my turn? %d | Turn %d\n", client->sock_fd, game_is_my_turn(client->game, client), client->game->turn);
+    server_client_t* other = game_other_player(client->game, client);
+
+    fprintf(stdout, "OTHER %d: my turn? %d | Turn %d\n", other->sock_fd, game_is_my_turn(client->game, other), client->game->turn);
+
+
+    if (!game_is_my_turn(client->game, client)) {
+        res.error.status_code = STATUS_GAME_NOT_MY_TURN;
+        sprintf(res.error.message, "It's not my turn to play");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send not my turn response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+
+    // Failed to process shot because target was invalid
+    uint8_t error = 0;
+    // If the field was empty or a ship then its a valid shot
+    uint8_t valid = 0;
+    // If the field was a ship that player can play again
+    uint8_t hit = 0; 
+    uint8_t field = game_register_shot(client->game, client, req.target);
+    switch (field) {
+        case GAME_FIELD_INVALID:
+            error = 1;
+            break;
+        case GAME_FIELD_SHIP:
+            valid = 1;
+            hit = 1;
+            break;
+        case GAME_FIELD_EMPTY:
+            valid = 1;
+            break;
+        case GAME_FIELD_MISS:
+            break;
+        case GAME_FIELD_HIT:
+            break;
+        default:
+            UNREACHABLE;
+    }
+
+    if (error) {
+        res.error.status_code = STATUS_SHOT_INVALID_FIELD;
+        sprintf(res.error.message, "Invalid target field");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send shot at invalid field response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (!valid) {
+        res.error.status_code = STATUS_SHOT_ALREADY_DESTROYED;
+        sprintf(res.error.message, "Shot at already destroyed field");
+
+        err = send_message(client->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send shot ate destroyed field response\n" RESET, client->sock_fd);
+        }
+
+        return err;
+    }
+
+    if (!hit) {
+        game_next_turn(client->game, client);
+    }
+
+    res.success.status_code = STATUS_OK;
+    res.success.hit = hit;
+
+    err = send_message(client->sock_fd, &res, sizeof(res));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send player shot response\n" RESET, client->sock_fd);
+    }
+
+    other = game_other_player(client->game, client);
+
+    RegisterShotRequestMessage register_shot;
+    register_shot.type = MSG_REGISTER_SHOT;
+    register_shot.hit = hit;
+    register_shot.target = req.target;
+   
+    err = send_message(other->sock_fd, &register_shot, sizeof(register_shot));
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send register shot request\n" RESET, other->sock_fd);
     }
 
     return ERR_NONE;

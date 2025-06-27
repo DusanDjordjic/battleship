@@ -1,4 +1,3 @@
-#include "include/game.h"
 #include <include/users.h>
 #include <include/server_handlers.h>
 #include <include/server_utils.h>
@@ -262,6 +261,15 @@ void* handle_client_connetion(void* params)
                 error_code err = handle_game_start(client, buffer);
                 if (err != ERR_NONE) {
                     fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send game start response, %d - %s\n" RESET,
+                            client->sock_fd, err, error_to_string(err));
+                }
+                break;
+            }
+            case MSG_PLAYERS_SHOT: {
+                fprintf(stdout, "CLIENT %d: Received player shot request\n", client->sock_fd);
+                error_code err = handle_players_shot(client, buffer);
+                if (err != ERR_NONE) {
+                    fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send player shot response, %d - %s\n" RESET,
                             client->sock_fd, err, error_to_string(err));
                 }
                 break;

@@ -33,7 +33,10 @@ error_code client_read_game_data(client_state_t* state);
 
 error_code client_start_game(client_state_t* state);
 error_code client_setup_game(client_state_t* state);
-error_code client_print_game(client_state_t* state);
+error_code client_print_game(uint8_t* game_state);
+error_code client_play_game(client_state_t* state, uint8_t my_turn);
+error_code client_make_move(client_state_t* state);
+error_code client_register_opponents_move(client_state_t* state);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
@@ -136,7 +139,10 @@ int main(int argc, char** argv)
                 client_look_for_game(&state);
                 // We successfully joined the game
                 if (state.game.game_id != 0) {
-                    client_start_game(&state);
+                    err = client_start_game(&state);
+                    if (err != ERR_NONE) {
+                        break; 
+                    }
                 }
 
 				break;
@@ -871,8 +877,44 @@ error_code client_start_game(client_state_t* state) {
     }
    
     GameStartResponseMessage res;
-    // TODO use poll to wait for state sock and display dots
-    //
+
+    fprintf(stdout, "Waiting for the other play to setup his ships\n");
+
+    struct pollfd poll_fds[1] = {
+        {.fd = state->sock_fd, .events = POLLIN},
+    };
+
+    int timeout = 300;
+    int dots_count = 0; 
+
+    while(1) {
+        int ret = poll(poll_fds, 1, timeout); 
+        if (ret == -1) {
+            fprintf(stderr, RED "ERROR: poll failed %s\n" RESET, strerror(errno));
+            break;
+        } 
+
+        if (ret == 0) {
+            if (dots_count == 10) {
+                printf("\r          \r"); 
+                fflush(stdout);
+                dots_count = 0;
+                continue;
+            }
+            putchar('.');
+            fflush(stdout);
+            dots_count++;
+            continue;
+        }
+
+
+        if (poll_fds[0].revents & POLLIN) {
+            break;
+        }
+    }
+
+    fprintf(stdout, "\n");
+
     err = read_message(state->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
         fprintf(stderr, RED "%s Failed to read game start response\n" RESET, error_to_string(err));
@@ -895,6 +937,13 @@ error_code client_start_game(client_state_t* state) {
 
     fprintf(stdout, GREEN "Other player has set his ships, the game starts. GOOD LUCK!\n" RESET);
 
+
+    while(1) {
+        err = client_play_game(state, res.success.first_turn);
+        if (err != ERR_NONE) {
+            return err;
+        }
+    }
     return ERR_NONE;
 }
 
@@ -907,7 +956,7 @@ error_code client_setup_game(client_state_t* state) {
         GameShip s = avaiable_ships[i];
 
         while(1) {
-            error_code err = client_print_game(state);
+            error_code err = client_print_game(state->game.my_state);
             if (err != ERR_NONE) {
                 UNREACHABLE;
             }
@@ -1006,7 +1055,7 @@ error_code client_setup_game(client_state_t* state) {
     }
 
     // print the game one last time
-    error_code err = client_print_game(state);
+    error_code err = client_print_game(state->game.my_state);
     if (err != ERR_NONE) {
         UNREACHABLE;
     }
@@ -1014,7 +1063,7 @@ error_code client_setup_game(client_state_t* state) {
     return ERR_NONE;
 }
 
-error_code client_print_game(client_state_t* state) {
+error_code client_print_game(uint8_t* game_state) {
     // 1 for first space 
     // for every letter 2 (1 for space one for letter)
     // 1 for \0
@@ -1030,7 +1079,7 @@ error_code client_print_game(client_state_t* state) {
     for (uint8_t y = 0; y < GAME_HEIGHT; y++) {
         printf("%d", y + 1); 
         for (uint8_t x = 0; x < GAME_WIDTH; x++) {
-            switch (state->game.my_state[x + y * GAME_WIDTH]) {
+            switch (game_state[x + y * GAME_WIDTH]) {
                 case GAME_FIELD_EMPTY:
                     printf(" ."); 
                     break;
@@ -1046,6 +1095,145 @@ error_code client_print_game(client_state_t* state) {
             }
         }
         printf("\n");
+    }
+
+    return ERR_NONE;
+}
+
+error_code client_play_game(client_state_t* state, uint8_t my_turn) {
+    error_code err;
+    while (1) {
+        fprintf(stdout, "MY TURN %d\n", my_turn);
+
+        fprintf(stdout, BLUE "My Board\n" RESET);
+        client_print_game(state->game.my_state);
+
+        fprintf(stdout, RED "Opponent's Board\n" RESET);
+        client_print_game(state->game.opponents_state);
+
+        if (my_turn) {
+            my_turn = 0;
+            err = client_make_move(state);
+            if (err != ERR_NONE) {
+                fprintf(stderr, RED "%s Failed to make a move, quitting the game" RESET, error_to_string(err));
+                return err;
+            }    
+            // Check if we won
+        } else {
+            my_turn = 1;
+            err = client_register_opponents_move(state);
+            if (err != ERR_NONE) {
+                fprintf(stderr, RED "%s Failed to register opponents move, quitting the game" RESET, error_to_string(err));
+                return err;
+            }
+        }
+            // Check if we lost
+    }
+
+    return err;
+}
+
+error_code client_register_opponents_move(client_state_t* state) {
+    error_code err = ERR_NONE;
+
+    while (1) {
+        fprintf(stdout, "Waiting for opponent to make a move\n");
+        RegisterShotRequestMessage req;
+        err = read_message(state->sock_fd, &req, sizeof(req));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s Failed to read opponents move\n" RESET, error_to_string(err));
+            return err;
+        }
+
+        fprintf(stdout, "Opponent shot at (%c,%c)\n", req.target.x + 'A', req.target.y + '1');
+
+        uint8_t index = req.target.x + req.target.y * GAME_WIDTH;
+        if (req.hit) {
+            fprintf(stdout,"HIT!, opponent plays again\n");
+            state->game.my_state[index] = GAME_FIELD_HIT;
+            continue;
+        } else {
+            fprintf(stdout,"MISS!, it's your turn now\n");
+            state->game.my_state[index] = GAME_FIELD_MISS;
+            break;
+        }
+    }
+
+    return ERR_NONE;
+}
+
+error_code client_make_move(client_state_t* state) {
+    char cmd[3];
+    error_code err;
+    Coordinate c;
+
+    while (1) {
+        while(1) {
+            fprintf(stdout, "Enter coordinates to shoot at (example: A1): ");
+            err = read_line(cmd, sizeof(cmd));
+            switch (err) {
+                case ERR_UNKNOWN:
+                case ERR_IIN:
+                    error_print(err);
+                    continue;
+                case ERR_NONE:
+                    break;
+            }
+
+            c.x = cmd[0] - 'A';
+            c.y = cmd[1] - '1';
+
+            err = coordinate_validate(c);
+            if (err != ERR_NONE) {
+                continue;
+            }
+
+            break;
+        }
+
+        PlayersShotRequestMessage req;
+        req.target = c;
+        req.type = MSG_PLAYERS_SHOT;
+        strncpy(req.api_key, state->api_key, API_KEY_LEN);
+
+        err = send_message(state->sock_fd, &req, sizeof(req));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s Failed to send player's shot request message\n" RESET, error_to_string(err));
+            return err;
+        }
+
+
+        PlayersShotResponseMessage res;
+
+        err = read_message(state->sock_fd, &res, sizeof(res));
+        if (err != ERR_NONE) {
+            fprintf(stderr, RED "%s Failed to real player's shot response message\n" RESET, error_to_string(err));
+            return err;
+        }
+
+        if (res.error.status_code == STATUS_SHOT_INVALID_FIELD) {
+            fprintf(stderr, RED "ERROR: Field (%c,%c) you have shot at is invalid\n", c.x + 'A', c.y + '1');
+            continue;
+        }       
+
+        if (res.error.status_code == STATUS_SHOT_ALREADY_DESTROYED) {
+            fprintf(stderr, RED "ERROR: Field (%c,%c) you have shot at is already destroyed\n", c.x + 'A', c.y + '1');
+            continue;
+        }
+
+        if (res.success.status_code == STATUS_OK){
+            if (res.success.hit) {
+                fprintf(stdout,"HIT!, you can play again\n");
+                state->game.opponents_state[c.x + c.y * GAME_WIDTH] = GAME_FIELD_HIT;
+                continue;
+            } else {
+                fprintf(stdout,"MISS!, other player's turn\n");
+                state->game.opponents_state[c.x + c.y * GAME_WIDTH] = GAME_FIELD_MISS;
+                break;
+            }
+        }
+
+        fprintf(stderr, RED "ERROR: Failed to process player's shot response message %d - %s\n" RESET, res.error.status_code, res.error.message);
     }
 
     return ERR_NONE;

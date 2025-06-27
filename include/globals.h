@@ -30,6 +30,10 @@
 #define MSG_CHALLENGE_QUESTION 8 // This is sent to the client
 #define MSG_CHALLENGE_ANSWER 9
 #define MSG_GAME_START 10
+// Player is sending the coordinate where he made a shot
+#define MSG_PLAYERS_SHOT 11
+// Informing the other player where the shot went
+#define MSG_REGISTER_SHOT 12
 
 // Request was processed successfully
 #define STATUS_OK 1
@@ -53,6 +57,12 @@
 #define STATUS_GAME_NOT_STARTED 10
 // Player closed the connection so the game is abandoned
 #define STATUS_GAME_ABANDONED 11
+// Player shot at invalid field (outside of the board)
+#define STATUS_SHOT_INVALID_FIELD 12
+// Player shot at already destoryed field
+#define STATUS_SHOT_ALREADY_DESTROYED 13
+// Player sent a shot but its not his turn
+#define STATUS_GAME_NOT_MY_TURN 14
 
 // Unknown error
 #define STATUS_UNKNOWN_ERROR 255 
@@ -86,4 +96,10 @@
 #define GAME_FIELD_SHIP 1
 #define GAME_FIELD_HIT 2
 #define GAME_FIELD_MISS 3
+#define GAME_FIELD_INVALID 255
+
+// Is it first player's turn or second
+#define GAME_FIRSTS_TURN 1
+#define GAME_SECONDS_TURN 2
+
 #endif

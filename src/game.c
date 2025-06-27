@@ -3,7 +3,10 @@
 #include "include/globals.h"
 #include "include/state.h"
 #include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
 
 inline uint8_t game_closed(server_game *game) {
     // If game is really closed the mutex is destroyed 
@@ -115,3 +118,104 @@ void game_set_clients_game_state(server_game* game, server_client_t* client, uin
     pthread_mutex_unlock(&game->lock);
 }
 
+// Returns 1 if the turn is of the passed client and 0 otherwise
+inline uint8_t game_set_inital_turn(server_game* game, server_client_t* client) {
+    if (!game_started(game)) {
+        UNREACHABLE;
+    }
+
+    pthread_mutex_lock(&game->lock);
+
+    uint8_t out = 0;
+
+    game->turn = GAME_FIRSTS_TURN;
+
+    if (game->first == client) {
+        out = 1;
+    } 
+
+    pthread_mutex_unlock(&game->lock);
+
+    return out;
+}
+
+// Sets the turn to current the other player
+inline void game_next_turn(server_game* game, server_client_t* client) {
+    if (!game_started(game)) {
+        UNREACHABLE;
+    }
+
+    pthread_mutex_lock(&game->lock);
+
+    if (game->first == client) {
+        game->turn = GAME_SECONDS_TURN;
+    } else {
+        game->turn = GAME_FIRSTS_TURN;
+    }
+
+    pthread_mutex_unlock(&game->lock);
+}
+
+uint8_t game_is_my_turn(server_game* game, server_client_t* client) {
+    if (!game_started(game)) {
+        UNREACHABLE;
+    }
+
+    pthread_mutex_lock(&game->lock);
+
+    uint8_t out  = 0;
+
+    if (game->first == client && game->turn == GAME_FIRSTS_TURN) {
+        out = 1;
+    } else if (game->second == client && game->turn == GAME_SECONDS_TURN) {
+        out = 1;
+    }
+
+    pthread_mutex_unlock(&game->lock);
+
+    return out;
+}
+
+// Registeres a shot chainging the game state
+// returning the state of the field before the changes 
+uint8_t game_register_shot(server_game* game, server_client_t* client, Coordinate target) {
+    if (!game_started(game)) {
+        UNREACHABLE;
+    }
+
+    pthread_mutex_lock(&game->lock);
+
+    uint8_t out = 0;
+    uint8_t* target_board = NULL;
+
+    if (game->first == client) {
+        target_board = game->second_game_state;
+    } else {
+        target_board = game->first_game_state;
+    }
+
+    int8_t index = target.x + target.y * GAME_WIDTH;
+    if (index < 0 && index >= GAME_WIDTH * GAME_HEIGHT) {
+        out = GAME_FIELD_INVALID;
+    } else {
+        out = target_board[index];
+        switch (out) {
+            case GAME_FIELD_EMPTY:
+                target_board[index] = GAME_FIELD_MISS;
+                break;
+            case GAME_FIELD_SHIP:
+                target_board[index] = GAME_FIELD_HIT;
+                break;
+            case GAME_FIELD_MISS:
+                break;
+            case GAME_FIELD_HIT:
+                break;
+            default:
+                UNREACHABLE;
+        }
+    }
+
+    pthread_mutex_unlock(&game->lock);
+
+    return out;
+}

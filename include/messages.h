@@ -1,6 +1,7 @@
 #ifndef MESSAGES_H
 #define MESSAGES_H
 
+#include "include/coordinate.h"
 #include "include/errors.h"
 #include <stdint.h>
 #include <include/globals.h>
@@ -83,12 +84,24 @@ typedef union {
 
 typedef struct {
     uint8_t status_code;
+    // Says to client if he is first to play
+    uint8_t first_turn;
 } GameStartSuccessResponseMessage;
 
 typedef union {
     GameStartSuccessResponseMessage success;
     ErrorResponseMessage error; 
 } GameStartResponseMessage;
+
+typedef struct {
+    uint8_t status_code;
+    uint8_t hit;
+} PlayersShotSucessResponseMessage;
+
+typedef struct {
+    PlayersShotSucessResponseMessage success;
+    ErrorResponseMessage error; 
+} PlayersShotResponseMessage;
 
 // Requests 
 typedef struct {
@@ -151,5 +164,19 @@ typedef struct {
     char api_key[API_KEY_LEN];
     uint8_t game_state[GAME_HEIGHT * GAME_WIDTH];
 } GameStartRequestMessage;
+
+typedef struct {
+    uint8_t type;
+    char api_key[API_KEY_LEN];
+    Coordinate target;
+} PlayersShotRequestMessage;
+
+// Sent by the server to ther other client (one being shot at)
+// To register the players shot
+typedef struct {
+    uint8_t type;
+    uint8_t hit;
+    Coordinate target;
+} RegisterShotRequestMessage;
 
 #endif
