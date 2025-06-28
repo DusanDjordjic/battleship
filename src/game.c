@@ -4,32 +4,31 @@
 #include "include/state.h"
 #include <pthread.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 
-inline uint8_t game_closed(server_game *game) {
+inline uint8_t game_closed(server_game_t *game) {
     // If game is really closed the mutex is destroyed 
     // so we are not using the mutex here
     return game->state == GAME_STATE_CLOSED;
 }
 
-inline uint8_t game_accepted(server_game *game) {
+inline uint8_t game_accepted(server_game_t *game) {
     pthread_mutex_lock(&game->lock);
     uint8_t out = game->state == GAME_STATE_WAITING_FOR_PLAYERS_STATES;
     pthread_mutex_unlock(&game->lock);
     return out;
 }
 
-inline uint8_t game_started(server_game *game) {
+inline uint8_t game_started(server_game_t *game) {
     pthread_mutex_lock(&game->lock);
     uint8_t out = game->state == GAME_STATE_STARTED;
     pthread_mutex_unlock(&game->lock);
     return out;
 }
 
-server_game game_new(server_client_t* first, server_client_t* second) {
-    server_game game = {
+server_game_t game_new(server_client_t* first, server_client_t* second) {
+    server_game_t game = {
         .first = first,
         .first_accepted = 0,
         .second = second,
@@ -42,7 +41,7 @@ server_game game_new(server_client_t* first, server_client_t* second) {
     return game;
 }
 
-void game_close(server_game* game) {
+void game_close(server_game_t* game) {
     pthread_mutex_lock(&game->lock); 
 
     game->first = NULL;
@@ -59,7 +58,7 @@ void game_close(server_game* game) {
     pthread_mutex_destroy(&game->lock);
 }
 
-void game_accept(server_game* game, server_client_t* client) {
+void game_accept(server_game_t* game, server_client_t* client) {
     pthread_mutex_lock(&game->lock);
 
     if (game->state != GAME_STATE_ACCEPTING) {
@@ -79,7 +78,7 @@ void game_accept(server_game* game, server_client_t* client) {
     pthread_mutex_unlock(&game->lock);
 }
 
-server_client_t* game_other_player(server_game* game, server_client_t* player) {
+server_client_t* game_other_player(server_game_t* game, server_client_t* player) {
     pthread_mutex_lock(&game->lock);
 
     server_client_t* out  = NULL;
@@ -94,7 +93,7 @@ server_client_t* game_other_player(server_game* game, server_client_t* player) {
     return out;
 }
 
-void game_set_clients_game_state(server_game* game, server_client_t* client, uint8_t* new_game_state) {
+void game_set_clients_game_state(server_game_t* game, server_client_t* client, uint8_t* new_game_state) {
     pthread_mutex_lock(&game->lock);
     if (game->state != GAME_STATE_WAITING_FOR_PLAYERS_STATES) {
         UNREACHABLE;
@@ -119,7 +118,7 @@ void game_set_clients_game_state(server_game* game, server_client_t* client, uin
 }
 
 // Returns 1 if the turn is of the passed client and 0 otherwise
-inline uint8_t game_set_inital_turn(server_game* game, server_client_t* client) {
+inline uint8_t game_set_inital_turn(server_game_t* game, server_client_t* client) {
     if (!game_started(game)) {
         UNREACHABLE;
     }
@@ -140,7 +139,7 @@ inline uint8_t game_set_inital_turn(server_game* game, server_client_t* client) 
 }
 
 // Sets the turn to current the other player
-inline void game_next_turn(server_game* game, server_client_t* client) {
+inline void game_next_turn(server_game_t* game, server_client_t* client) {
     if (!game_started(game)) {
         UNREACHABLE;
     }
@@ -156,7 +155,7 @@ inline void game_next_turn(server_game* game, server_client_t* client) {
     pthread_mutex_unlock(&game->lock);
 }
 
-uint8_t game_is_my_turn(server_game* game, server_client_t* client) {
+uint8_t game_is_my_turn(server_game_t* game, server_client_t* client) {
     if (!game_started(game)) {
         UNREACHABLE;
     }
@@ -178,7 +177,7 @@ uint8_t game_is_my_turn(server_game* game, server_client_t* client) {
 
 // Registeres a shot chainging the game state
 // returning the state of the field before the changes 
-uint8_t game_register_shot(server_game* game, server_client_t* client, Coordinate target) {
+uint8_t game_register_shot(server_game_t* game, server_client_t* client, Coordinate target) {
     if (!game_started(game)) {
         UNREACHABLE;
     }
@@ -218,4 +217,77 @@ uint8_t game_register_shot(server_game* game, server_client_t* client, Coordinat
     pthread_mutex_unlock(&game->lock);
 
     return out;
+}
+
+uint8_t game_check_win(server_game_t* game, server_client_t* client) {
+    if (!game_started(game)) {
+        UNREACHABLE;
+    }
+
+    int8_t out = 0;
+    pthread_mutex_lock(&game->lock);
+
+    uint8_t* opponents_board = NULL;
+
+    if (game->first == client) {
+        opponents_board = game->second_game_state;
+    } else {
+        opponents_board = game->first_game_state;
+    }
+   
+    uint8_t opponents_ships = 0;
+    for (uint16_t i = 0; i < GAME_WIDTH * GAME_HEIGHT; i++) {
+        if (opponents_board[i] == GAME_FIELD_SHIP) {
+            opponents_ships++;
+            break;
+        }
+    }
+
+    // If opponent doesn't have any ships left we won
+    if (opponents_ships == 0) {
+        out = 1;
+    } 
+
+    pthread_mutex_unlock(&game->lock);
+
+    return out;
+}
+
+uint8_t game_finished(server_game_t* game) {
+    pthread_mutex_lock(&game->lock);
+    uint8_t out = game->state == GAME_STATE_FINISHED;
+    pthread_mutex_unlock(&game->lock);
+    return out;
+}
+
+void game_finish(server_game_t* game, server_client_t* client) {
+    pthread_mutex_lock(&game->lock);
+    game->state = GAME_STATE_FINISHED;
+
+    if (game->first == client) {
+        game->won = GAME_FIRST_WON;
+    } else {
+        game->won = GAME_SECOND_WON;
+    }
+
+    pthread_mutex_unlock(&game->lock);
+}
+
+
+game_results_t game_create_result(server_game_t* game) {
+    if (!game_finished(game)) {
+        UNREACHABLE;
+    }
+
+    pthread_mutex_lock(&game->lock);
+
+    game_results_t res;
+    res.won = game->won;
+    memcpy(res.first_game_state, game->first_game_state, GAME_WIDTH * GAME_HEIGHT);
+    memcpy(res.second_game_state, game->second_game_state, GAME_WIDTH * GAME_HEIGHT);
+    strncpy(res.first_player_username, game->first->user->username, USERNAME_MAX_LEN);
+    strncpy(res.second_player_username, game->second->user->username, USERNAME_MAX_LEN);
+    pthread_mutex_unlock(&game->lock);
+
+    return res;
 }

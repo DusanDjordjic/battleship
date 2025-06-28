@@ -477,7 +477,7 @@ error_code handle_challenge_player(server_client_t* client, const char* buffer) 
     //
     // To achieve this, create new game with id and add both clients there
 
-    server_game* game = server_add_game(client->server_state, game_new(client, other));
+    server_game_t* game = server_add_game(client->server_state, game_new(client, other));
     
     client_join_game(client, game);
     client_join_game(other, game);
@@ -530,7 +530,7 @@ error_code handle_challenge_answer(server_client_t* client, const char* buffer) 
         return err;
     }
 
-    server_game* game = client->game;
+    server_game_t* game = client->game;
     server_client_t* other = game_other_player(game, client);
 
     if (req.accept) {
@@ -810,12 +810,22 @@ error_code handle_players_shot(server_client_t* client, const char* buffer) {
         return err;
     }
 
-    if (!hit) {
-        game_next_turn(client->game, client);
+    // It's not possible for my opponent to win the game on my turn
+    // that's why game_won can be 0 or a 1
+    uint8_t game_won = game_check_win(client->game, client);
+    if (game_won) {
+        game_finish(client->game, client);
+        game_results_t res = game_create_result(client->game);
+        server_add_game_result(client->server_state, res);
+    } else {
+        if (!hit) {
+            game_next_turn(client->game, client);
+        }
     }
 
     res.success.status_code = STATUS_OK;
     res.success.hit = hit;
+    res.success.win = game_won;
 
     err = send_message(client->sock_fd, &res, sizeof(res));
     if (err != ERR_NONE) {
@@ -828,11 +838,14 @@ error_code handle_players_shot(server_client_t* client, const char* buffer) {
     register_shot.type = MSG_REGISTER_SHOT;
     register_shot.hit = hit;
     register_shot.target = req.target;
+    // other player won the game == we lost
+    register_shot.lose = game_won;
    
     err = send_message(other->sock_fd, &register_shot, sizeof(register_shot));
     if (err != ERR_NONE) {
         fprintf(stderr, RED "ERROR: CLIENT %d: Failed to send register shot request\n" RESET, other->sock_fd);
     }
 
+    
     return ERR_NONE;
 }

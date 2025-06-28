@@ -96,6 +96,7 @@ typedef union {
 typedef struct {
     uint8_t status_code;
     uint8_t hit;
+    uint8_t win;
 } PlayersShotSucessResponseMessage;
 
 typedef struct {
@@ -176,6 +177,7 @@ typedef struct {
 typedef struct {
     uint8_t type;
     uint8_t hit;
+    uint8_t lose;
     Coordinate target;
 } RegisterShotRequestMessage;
 

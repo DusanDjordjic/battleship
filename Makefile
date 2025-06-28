@@ -17,10 +17,10 @@ HEADERS=$(INC)/args.h $(INC)/errors.h $(INC)/io.h \
 	$(INC)/menu.h $(INC)/server.h $(INC)/state.h $(INC)/server.h \
 	$(INC)/globals.h $(INC)/messages.h $(INC)/server_handlers.h	\
 	$(INC)/server_utils.h $(INC)/game.h $(INC)/vector/vector.h \
-	$(INC)/game_ship.h
+	$(INC)/game_ship.h $(INC)/game_results.h
 
 SERVER_SRCS=$(SRC)/error.c $(SRC)/server_start.c $(SRC)/args.c $(SRC)/messages.c \
-			$(SRC)/users.c $(SRC)/server_handlers.c $(SRC)/server_utils.c $(SRC)/game.c
+			$(SRC)/users.c $(SRC)/server_handlers.c $(SRC)/server_utils.c $(SRC)/game.c $(SRC)/game_results.c
 SERVER_SRCS_BINARY=$(SRC)/bin/server.c
 SERVER_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS)))
 SERVER_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(SERVER_SRCS_BINARY)))

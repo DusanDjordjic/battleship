@@ -1,3 +1,4 @@
+#include "include/game_results.h"
 #include <include/users.h>
 #include <include/server_handlers.h>
 #include <include/server_utils.h>
@@ -53,18 +54,26 @@ int main(int argc, char** argv)
         return 1; 
     }
 
-    vector_create(&state.games, sizeof(server_game));
+    vector_create(&state.games, sizeof(server_game_t));
 	vector_create(&state.clients, sizeof(server_client_t));
 
 	pthread_rwlock_init(&state.clients_rwlock, NULL);
     pthread_rwlock_init(&state.users_rwlock, NULL);
     pthread_rwlock_init(&state.games_rwlock, NULL);
+    pthread_rwlock_init(&state.game_results_rwlock, NULL);
 
     // Load all users from a file
     // Users load will initalize users vector
     err = users_load(&state.users, USERS_FILEPATH);
     if (err != ERR_NONE) {
         fprintf(stderr, RED "%s failed to read users\n" RESET, error_to_string(err));
+        return 1;
+    }
+
+    // Game results load will initialize game results vector
+    err = game_results_load(&state.game_results, GAME_RESULTS_FILEPATH);
+    if (err != ERR_NONE) {
+        fprintf(stderr, RED "%s failed to read game results\n" RESET, error_to_string(err));
         return 1;
     }
 
@@ -143,9 +152,11 @@ int main(int argc, char** argv)
 	close(state.sock_fd);
 	vector_destroy(&state.clients, NULL);
 	vector_destroy(&state.users, NULL);
+	vector_destroy(&state.game_results, NULL);
 	pthread_rwlock_destroy(&state.clients_rwlock);
 	pthread_rwlock_destroy(&state.users_rwlock);
 	pthread_rwlock_destroy(&state.games_rwlock);
+	pthread_rwlock_destroy(&state.game_results_rwlock);
 
 	return 0;
 }

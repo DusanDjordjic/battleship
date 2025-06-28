@@ -35,8 +35,8 @@ error_code client_start_game(client_state_t* state);
 error_code client_setup_game(client_state_t* state);
 error_code client_print_game(uint8_t* game_state);
 error_code client_play_game(client_state_t* state, uint8_t my_turn);
-error_code client_make_move(client_state_t* state);
-error_code client_register_opponents_move(client_state_t* state);
+error_code client_make_move(client_state_t* state, uint8_t* won);
+error_code client_register_opponents_move(client_state_t* state, uint8_t* lost);
 
 error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
@@ -141,6 +141,8 @@ int main(int argc, char** argv)
                 if (state.game.game_id != 0) {
                     err = client_start_game(&state);
                     if (err != ERR_NONE) {
+                        fprintf(stderr, RED "%s Something went wrong while playing the game, quitting the game\n" RESET, error_to_string(err));
+                        // TODO: Send message to server that we are quitting the game
                         break; 
                     }
                 }
@@ -151,13 +153,18 @@ int main(int argc, char** argv)
                 // We successfully joined the game
                 if (state.game.game_id != 0) {
                     client_start_game(&state);
+                    if (err != ERR_NONE) {
+                        fprintf(stderr, RED "%s Something went wrong while playing the game, quitting the game\n" RESET, error_to_string(err));
+                        // TODO: Send message to server that we are quitting the game
+                        break; 
+                    }
                 }
 				break;
 			case 4:
 				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
 				break;
 			default:
-				fprintf(stderr, RED "ERROR: nvalid choice\n" RESET);
+				fprintf(stderr, RED "ERROR: invalid choice\n" RESET);
 				break;
 			case 0:
 				err = client_logout(&state);
@@ -938,13 +945,7 @@ error_code client_start_game(client_state_t* state) {
     fprintf(stdout, GREEN "Other player has set his ships, the game starts. GOOD LUCK!\n" RESET);
 
 
-    while(1) {
-        err = client_play_game(state, res.success.first_turn);
-        if (err != ERR_NONE) {
-            return err;
-        }
-    }
-    return ERR_NONE;
+    return client_play_game(state, res.success.first_turn);
 }
 
 error_code client_setup_game(client_state_t* state) {
@@ -1102,36 +1103,50 @@ error_code client_print_game(uint8_t* game_state) {
 
 error_code client_play_game(client_state_t* state, uint8_t my_turn) {
     error_code err;
-    while (1) {
-        if (my_turn) {
-            my_turn = 0;
-            err = client_make_move(state);
-            if (err != ERR_NONE) {
-                fprintf(stderr, RED "%s Failed to make a move, quitting the game" RESET, error_to_string(err));
-                return err;
-            }    
-            // Check if we won
-        } else {
-            my_turn = 1;
-            err = client_register_opponents_move(state);
-            if (err != ERR_NONE) {
-                fprintf(stderr, RED "%s Failed to register opponents move, quitting the game" RESET, error_to_string(err));
-                return err;
-            }
-        }
-            // Check if we lost
-    }
-
-    return err;
-}
-
-error_code client_register_opponents_move(client_state_t* state) {
-    error_code err = ERR_NONE;
+    uint8_t won;
+    uint8_t lost;
 
     while (1) {
         fprintf(stdout, BLUE "My Board\n" RESET);
         client_print_game(state->game.my_state);
 
+        fprintf(stdout, RED "Opponent's Board\n" RESET);
+        client_print_game(state->game.opponents_state);
+
+        if (my_turn) {
+            my_turn = 0;
+            won = 0;
+            err = client_make_move(state, &won);
+            if (err != ERR_NONE) {
+                fprintf(stderr, RED "%s Failed to make a move, quitting the game" RESET, error_to_string(err));
+                return err;
+            }    
+
+            if (won) {
+                return ERR_NONE;
+            }
+        } else {
+            my_turn = 1;
+            lost = 0;
+            err = client_register_opponents_move(state, &lost);
+            if (err != ERR_NONE) {
+                fprintf(stderr, RED "%s Failed to register opponents move, quitting the game" RESET, error_to_string(err));
+                return err;
+            }
+
+            if (lost) {
+                return ERR_NONE;
+            }
+        }
+    }
+
+    return err;
+}
+
+error_code client_register_opponents_move(client_state_t* state, uint8_t* lost) {
+    error_code err = ERR_NONE;
+
+    while (1) {
         fprintf(stdout, "Waiting for opponent to make a move\n");
         RegisterShotRequestMessage req;
         err = read_message(state->sock_fd, &req, sizeof(req));
@@ -1143,12 +1158,28 @@ error_code client_register_opponents_move(client_state_t* state) {
         fprintf(stdout, "Opponent shot at (%c,%c)\n", req.target.x + 'A', req.target.y + '1');
 
         uint8_t index = req.target.x + req.target.y * GAME_WIDTH;
+
+        if (req.lose && !req.hit) {
+            // It's not possible that opponent missed and we lost the game
+            UNREACHABLE;
+        }
+
+        if (req.lose) {
+            *lost = 1;
+            // Register the hit
+            state->game.opponents_state[index] = GAME_FIELD_HIT;
+            fprintf(stdout, RED "Opponent sunk all of your ships, you lost! Better luck next time!\n" RESET);
+            return ERR_NONE;
+        }
+
+        *lost = 0;
+
         if (req.hit) {
-            fprintf(stdout,"HIT!, opponent plays again\n");
+            fprintf(stdout,"HIT! opponent plays again\n");
             state->game.my_state[index] = GAME_FIELD_HIT;
             continue;
         } else {
-            fprintf(stdout,"MISS!, it's your turn now\n");
+            fprintf(stdout,"MISS! it's your turn now\n");
             state->game.my_state[index] = GAME_FIELD_MISS;
             break;
         }
@@ -1157,15 +1188,12 @@ error_code client_register_opponents_move(client_state_t* state) {
     return ERR_NONE;
 }
 
-error_code client_make_move(client_state_t* state) {
+error_code client_make_move(client_state_t* state, uint8_t* won) {
     char cmd[3];
     error_code err;
     Coordinate c;
 
     while (1) {
-        fprintf(stdout, RED "Opponent's Board\n" RESET);
-        client_print_game(state->game.opponents_state);
-
         while(1) {
             fprintf(stdout, "Enter coordinates to shoot at (example: A1): ");
             err = read_line(cmd, sizeof(cmd));
@@ -1200,7 +1228,6 @@ error_code client_make_move(client_state_t* state) {
             return err;
         }
 
-
         PlayersShotResponseMessage res;
 
         err = read_message(state->sock_fd, &res, sizeof(res));
@@ -1220,6 +1247,20 @@ error_code client_make_move(client_state_t* state) {
         }
 
         if (res.success.status_code == STATUS_OK){
+            if (res.success.win && !res.success.hit) {
+                // It's not possible to miss and win the game 
+                UNREACHABLE;
+            }
+
+            if (res.success.win) {
+                *won = 1;
+                // Register the hit
+                state->game.opponents_state[c.x + c.y * GAME_WIDTH] = GAME_FIELD_HIT;
+                fprintf(stdout, GREEN "Good job you were able to sink all of the opponents ships, you won!\n" RESET);
+                return ERR_NONE;
+            }
+
+            *won = 0;
             if (res.success.hit) {
                 fprintf(stdout,"HIT!, you can play again\n");
                 state->game.opponents_state[c.x + c.y * GAME_WIDTH] = GAME_FIELD_HIT;

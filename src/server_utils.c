@@ -63,15 +63,15 @@ server_client_t* server_find_client_by_username(server_state_t* state, char* use
 }
 
 
-server_game* server_add_game(server_state_t* state, server_game game) {
+server_game_t* server_add_game(server_state_t* state, server_game_t game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
     game.id = state->next_game_id;
     state->next_game_id++;
 
     // Try to find a free space in games vector to add the new game
-    server_game* out = NULL;
+    server_game_t* out = NULL;
     for (uint32_t i = 0; i < state->games.logical_length; i++) {
-        server_game* g = vector_at(&state->games, i);
+        server_game_t* g = vector_at(&state->games, i);
         if (g->state == GAME_STATE_CLOSED) {
             out = g;
             break;
@@ -89,7 +89,7 @@ server_game* server_add_game(server_state_t* state, server_game game) {
     return out;
 }
 
-void server_remove_game(server_state_t* state, server_game* game) {
+void server_remove_game(server_state_t* state, server_game_t* game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
   
     game_close(game);
@@ -121,6 +121,15 @@ void client_clear_looking_for_game(server_client_t* client) {
     client->flags &= ~CLIENT_LOOKING_FOR_GAME;
 }
 
-void client_join_game(server_client_t* client, server_game* game) {
+void client_join_game(server_client_t* client, server_game_t* game) {
     client->game = game;
 }
+
+game_results_t* server_add_game_result(server_state_t* state, game_results_t res) {
+    pthread_rwlock_wrlock(&state->game_results_rwlock);
+    vector_push(&state->game_results, &res);
+    game_results_t* out = vector_at(&state->game_results, state->game_results.logical_length - 1);
+    pthread_rwlock_unlock(&state->game_results_rwlock);
+    return out;
+}
+
