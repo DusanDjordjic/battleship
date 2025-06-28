@@ -42,7 +42,7 @@ error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
 void* print_loading(void* param);
 
-GameShip avaiable_ships [3] = {
+GameShip avaiable_ships [10] = {
     // {.width = 4, .height = 1},
     // {.width = 3, .height = 1},
     // {.width = 3, .height = 1},

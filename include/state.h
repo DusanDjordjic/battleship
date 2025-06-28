@@ -95,7 +95,7 @@ struct server_game_t {
     pthread_mutex_t lock;
 
     uint8_t first_game_state[GAME_WIDTH * GAME_HEIGHT];
-    uint8_t second_game_state[GAME_WIDTH * GAME_WIDTH];
+    uint8_t second_game_state[GAME_WIDTH * GAME_HEIGHT];
     uint8_t first_state_set;
     uint8_t second_state_set;
 

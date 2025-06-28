@@ -10,7 +10,7 @@ typedef struct {
     char second_player_username[USERNAME_MAX_LEN];
     uint8_t won;
     uint8_t first_game_state[GAME_WIDTH * GAME_HEIGHT];
-    uint8_t second_game_state[GAME_WIDTH * GAME_WIDTH];
+    uint8_t second_game_state[GAME_WIDTH * GAME_HEIGHT];
 } game_results_t;
 
 #define GAME_RESULTS_FILEPATH "./results.db"
