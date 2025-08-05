@@ -42,7 +42,7 @@ error_code connect_to_server(client_state_t* state);
 error_code client_menu_create(menu_t* menu);
 void* print_loading(void* param);
 
-GameShip avaiable_ships [10] = {
+GameShip avaiable_ships [3] = {
     // {.width = 4, .height = 1},
     // {.width = 3, .height = 1},
     // {.width = 3, .height = 1},
@@ -159,9 +159,6 @@ int main(int argc, char** argv)
                         break; 
                     }
                 }
-				break;
-			case 4:
-				printf(BLUE "DO PROFILE SETTINGS\n" RESET);
 				break;
 			default:
 				fprintf(stderr, RED "ERROR: invalid choice\n" RESET);
@@ -567,7 +564,7 @@ error_code client_look_for_game(client_state_t* state) {
         fprintf(stderr, RED "%s Failed to read look for game response\n" RESET, error_to_string(err));
         return err;
     }
-
+  
     if (res.error.status_code != STATUS_OK) {
         fprintf(stderr, RED "ERROR: Look for game request failed, %d - %s\n" RESET, res.error.status_code, res.error.message);
 
@@ -1310,7 +1307,7 @@ error_code client_menu_create(menu_t* menu)
 
 	{
 		menu_page_t page;
-		err = menu_page_init(&page, 5);
+		err = menu_page_init(&page, 4);
 		if (err != ERR_NONE) {
 			return err;
 		}
@@ -1325,10 +1322,6 @@ error_code client_menu_create(menu_t* menu)
 		}
 		{
 			menu_item_t item = { .index = 3, .prompt = "Challenge other player" };
-			menu_page_add_item(&page, item);
-		}
-		{
-			menu_item_t item = { .index = 4, .prompt = "Profile settings" };
 			menu_page_add_item(&page, item);
 		}
 		{

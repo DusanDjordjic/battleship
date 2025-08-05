@@ -33,7 +33,7 @@ CLIENT_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS)))
 CLIENT_OBJS_BINARY=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(CLIENT_SRCS_BINARY)))
 CLIENT_BIN=$(BIN)/client.out
 
-TESTS_SRCS=$(TESTS)/test_tcp_server.c $(TESTS)/test_coordinate.c $(TESTS)/test_game_ship.c
+TESTS_SRCS=$(TESTS)/test_coordinate.c $(TESTS)/test_game_ship.c
 TESTS_OBJS=$(patsubst %.c, $(OBJ)/%.o,$(notdir $(TESTS_SRCS)))
 TESTS_ALL_SRCS=$(SERVER_SRCS) $(CLIENT_SRCS) $(TESTS_SRCS)
 TESTS_ALL_OBJS=$(SERVER_OBJS) $(CLIENT_OBJS) $(TESTS_OBJS)

@@ -46,13 +46,13 @@ error_code game_ship_validate_coordinates(GameShip ship) {
     }
 
     if (width != swidth) {
-        fprintf(stderr, RED "Ship width needs to be %d but looking at coordinates (%c,%c) (%c,%c) ship width is %d = |%c - %c| + 1\n" RESET, 
+        fprintf(stderr, RED "Ship width needs to be %d but looking at coordinates (%c,%c) (%c,%c) ship width is %d != |%c - %c| + 1\n" RESET, 
                 swidth, ship.start.x + 'A', ship.start.y + '1', ship.end.x + 'A', ship.end.y + '1', width, ship.start.x + 'A', ship.end.x + 'A');
         return ERR_SHIP_ICOORDINATES;
     }
 
     if (height != sheight) {
-        fprintf(stderr, RED "Ship height needs to be %d but looking at coordinates (%c,%c) (%c,%c) ship height is %d = |%c - %c| + 1\n" RESET, 
+        fprintf(stderr, RED "Ship height needs to be %d but looking at coordinates (%c,%c) (%c,%c) ship height is %d != |%c - %c| + 1\n" RESET, 
                 sheight, ship.start.x + 'A', ship.start.y + '1', ship.end.x + 'A', ship.end.y + '1', height , ship.start.y + '1', ship.end.y + '1');
         return ERR_SHIP_ICOORDINATES;
     }
@@ -67,9 +67,28 @@ error_code game_ship_validate_fields(uint8_t* game_state, GameShip ship) {
     // Fields occupied by current ship
     Coordinate already_placed[ship.width * ship.height];
     uint8_t already_placed_count = 0;
+    
+    uint8_t xstart, xend;
+    uint8_t ystart, yend;
 
-    for (uint8_t x = ship.start.x; x <= ship.end.x; x++) {
-        for (uint8_t y = ship.start.y; y <= ship.end.y; y++) {
+    if (ship.start.x <= ship.end.x) {
+        xstart = ship.start.x;
+        xend = ship.end.x;
+    } else {
+        xstart = ship.end.x;
+        xend = ship.start.x;
+    }
+
+    if (ship.start.y <= ship.end.y) {
+        ystart = ship.start.y;
+        yend = ship.end.y;
+    } else {
+        ystart = ship.end.y;
+        yend = ship.start.y;
+    }
+    
+    for (uint8_t x = xstart; x <= xend; x++) {
+        for (uint8_t y = ystart; y <= yend; y++) {
             // These need to be empty
             // . X . 
             // X X X

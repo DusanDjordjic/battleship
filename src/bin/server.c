@@ -132,7 +132,7 @@ int main(int argc, char** argv)
                 };
                 vector_push(&state.clients, &new_client);
                 client_p = vector_at(&state.clients, state.clients.logical_length - 1);
-                fprintf(stdout, "Didn't find free space for client, new vector len %d\n", state.clients.logical_length);
+                // fprintf(stdout, "Didn't find free space for client, new vector len %d\n", state.clients.logical_length);
             }
 
             pthread_rwlock_unlock(&state.clients_rwlock);

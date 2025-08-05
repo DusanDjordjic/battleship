@@ -37,7 +37,7 @@
 
 // Request was processed successfully
 #define STATUS_OK 1
-// There was a conflict (username already exists, field is already destroyed, etc..)
+// There was a conflict (username already exists, etc..)
 #define STATUS_CONFLICT 2
 // Requested resource wasn't found
 #define STATUS_NOT_FOUND 3
