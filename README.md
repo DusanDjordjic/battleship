@@ -33,7 +33,6 @@ U svakom trenutku treba omogućiti prelazak sa ekrana za igru na ekran sa glavni
 
 ## Kako pokrenuti projekat
 
-1. Instalirati ncurses biblioteku. Nju nismo dodali u external jer vecina linux operativnih sistema je vec ima.
-2. Pokrenuti `make build`. Ova komanda ce da napravi bin/server.out and bin/client.out programe
-3. pokrenuti server `./bin/server.out 9000` 
-4. pokrenuti vise klijenata `./bin/client.out 127.0.0.1 9000`
+1. Pokrenuti `make build`. Ova komanda ce da napravi bin/server.out and bin/client.out programe
+2. pokrenuti server `./bin/server.out 9000` 
+3. pokrenuti vise klijenata `./bin/client.out 127.0.0.1 9000`

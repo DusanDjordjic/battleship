@@ -19,6 +19,10 @@
 #define API_KEY_LEN 33 // 32 + 1
 #define ERROR_MESSAGE_MAX_LEN 129 // 128 + 1
 
+// Width and height of the game board
+#define GAME_WIDTH 8
+#define GAME_HEIGHT 8
+
 // Message types 
 #define MSG_SIGNUP 1
 #define MSG_LOGIN 2
@@ -90,8 +94,6 @@
 #define GAME_STATE_STARTED 3
 #define GAME_STATE_FINISHED 4
 
-#define GAME_WIDTH 3
-#define GAME_HEIGHT 3
 
 #define GAME_FIELD_EMPTY 0
 #define GAME_FIELD_SHIP 1
