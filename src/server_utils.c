@@ -89,7 +89,7 @@ server_game_t* server_add_game(server_state_t* state, server_game_t game) {
     return out;
 }
 
-void server_remove_game(server_state_t* state, server_game_t* game) {
+void server_close_game(server_state_t* state, server_game_t* game) {
     pthread_rwlock_wrlock(&state->games_rwlock);
   
     game_close(game);

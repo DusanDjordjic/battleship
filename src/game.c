@@ -1,4 +1,3 @@
-
 #include "include/game.h"
 #include "include/globals.h"
 #include "include/state.h"

@@ -314,6 +314,6 @@ void handle_client_disconnect(server_client_t* client) {
     if (client->game->state != GAME_STATE_CLOSED) {
         // close the game, other client will get an error when he tries to 
         // send some game events 
-        server_remove_game(client->server_state, client->game); 
+        server_close_game(client->server_state, client->game); 
     }
 }

@@ -566,7 +566,7 @@ error_code handle_challenge_answer(server_client_t* client, const char* buffer) 
     client->game = NULL;
     other->game = NULL;
 
-    server_remove_game(client->server_state, game);
+    server_close_game(client->server_state, game);
 
     return ERR_NONE;
 }
